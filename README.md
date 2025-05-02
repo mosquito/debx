@@ -1,5 +1,7 @@
 # debx
 
+[![Coverage Status](https://coveralls.io/repos/github/mosquito/debx/badge.svg?branch=master)](https://coveralls.io/github/mosquito/debx?branch=master) [![tests](https://github.com/mosquito/debx/actions/workflows/tests.yml/badge.svg)](https://github.com/mosquito/debx/actions/workflows/tests.yml)
+
 A lightweight Python library for creating, reading, and manipulating Debian package (.deb) files.
 
 ## Features
