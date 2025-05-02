@@ -28,7 +28,7 @@ from debx import DebReader
 # Open a .deb file
 with open("package.deb", "rb") as f:
     reader = DebReader(f)
-    
+
     # Extract control file
     control_file = reader.control.extractfile("control")
     control_content = control_file.read().decode("utf-8")

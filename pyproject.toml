@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "debx"
-version = "0.1.0"
+version = "0.1.1"
 description = "Minimal Python library to programmatically construct Debian .deb packages"
 readme = "README.md"
 authors = [
@@ -31,3 +31,6 @@ dependencies = []
 "Homepage" = "https://github.com/mosquito/debx"
 "Repository" = "https://github.com/mosquito/debx"
 "Issues" = "https://github.com/mosquito/debx/issues"
+
+[project.scripts]
+"debx" = "debx.__main__:main"

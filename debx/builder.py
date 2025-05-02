@@ -43,15 +43,15 @@ class DebBuilder:
     def add_data_entry(
         self,
         content: bytes,
-        target: Union[PurePosixPath, str],
+        name: Union[PurePosixPath, str],
         uid: int = 0,
         gid: int = 0,
         mode: int = 0o644,
         mtime: int = -1,
         symlink_to: Optional[Union[PurePosixPath, str]] = None,
     ) -> None:
-        target = PurePosixPath(target)
-        tar_info_path = target.relative_to("/")
+        name = PurePosixPath(name)
+        tar_info_path = name.relative_to("/")
         tar_info = tarfile.TarInfo(str(tar_info_path))
 
         if symlink_to:
@@ -59,7 +59,7 @@ class DebBuilder:
             tar_info.linkname = str(symlink_to)
             tar_info.size = 0
         else:
-            self.md5sums[target] = hashlib.md5(content).hexdigest()
+            self.md5sums[name] = hashlib.md5(content).hexdigest()
             tar_info = tarfile.TarInfo(str(tar_info_path))
             tar_info.type = tarfile.REGTYPE
             tar_info.size = len(content)
@@ -70,7 +70,7 @@ class DebBuilder:
         tar_info.gid = gid
 
         current_path = Path("/")
-        for part in target.parent.parts[1:]:
+        for part in name.parent.parts[1:]:
             current_path = current_path / part
             self.directories.add(current_path)
 
