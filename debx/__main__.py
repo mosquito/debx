@@ -74,21 +74,22 @@ def parse_file(file: str) -> Iterable[CLIFile]:
             )
         dest_path = Path(dest)
         files = []
-        for subpath in path.rglob("**"):
-            if subpath.is_dir():
-                continue
 
-            stat = subpath.stat()
-            files.append(
-                make_file(
-                    subpath,
-                    dest_path / subpath.relative_to(path),
-                    uid=result.get("uid", stat.st_uid),
-                    gid=result.get("gid", stat.st_gid),
-                    mode=stat.st_mode & 0o777,
-                    mtime=stat.st_mtime,
+        for subdir, dirs, subfiles in path.walk():
+            for fname in subfiles:
+                subpath = Path(subdir) / fname
+
+                stat = subpath.stat()
+                files.append(
+                    make_file(
+                        subpath,
+                        str(dest_path / subpath.relative_to(path)),
+                        uid=result.get("uid", stat.st_uid),
+                        gid=result.get("gid", stat.st_gid),
+                        mode=stat.st_mode & 0o777,
+                        mtime=stat.st_mtime,
+                    )
                 )
-            )
         return files
     elif path.is_file() or path.is_symlink():
         return [make_file(path, dest, **result)]
