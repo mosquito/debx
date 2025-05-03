@@ -143,8 +143,26 @@ The `unpack` command extracts a .deb package into a directory:
 debx unpack package.deb --directory output_dir
 ```
 
-This will extract the internal AR archive members (`debian-binary`, `control.tar.gz`, `data.tar.*`) 
-to the specified directory.
+This will extract the internal AR archive members and tar archives 
+(`debian-binary`, `control/`, `data/`) into the specified directory.
+
+### Inspecting a Debian Package
+
+The `inspect` command allows you to view the contents of a .deb package in different formats:
+
+```bash
+debx inspect package.deb  # --format=ls (default)
+```
+
+This will display the contents of the control file and the list of files in the data archive.
+
+You can also specify the format to view the control file in different formats:
+
+```bash
+debx inspect --format=json package.deb 
+```
+
+See the `--help` option for more details on available formats.
 
 ## License
 
