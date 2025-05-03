@@ -2,7 +2,8 @@
 
 [![Coverage Status](https://coveralls.io/repos/github/mosquito/debx/badge.svg?branch=master)](https://coveralls.io/github/mosquito/debx?branch=master) [![tests](https://github.com/mosquito/debx/actions/workflows/tests.yml/badge.svg)](https://github.com/mosquito/debx/actions/workflows/tests.yml) ![PyPI - Version](https://img.shields.io/pypi/v/debx) ![PyPI - Types](https://img.shields.io/pypi/types/debx) ![PyPI - License](https://img.shields.io/pypi/l/debx)
 
-A lightweight Python library for creating, reading, and manipulating Debian package (.deb) files.
+Pronounced "deb-ex", `debx` is a Python library for creating, reading, and manipulating Debian package files.
+This pacage includes the `debx` command-line tool for packing and unpacking and inspecting any .deb packages.
 
 ## Features
 

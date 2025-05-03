@@ -1,12 +1,12 @@
 import os
-import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from argparse import ArgumentTypeError
 
-from debx.__main__ import (
-    parse_file, make_file, cli_pack, cli_unpack, PARSER,
-    ArgumentTypeError, main
-)
+import pytest
+from unittest.mock import  MagicMock
+
+from debx.cli.inspect import cli_inspect
+from debx.cli.pack import parse_file, cli_pack
+from debx.cli.unpack import cli_unpack
 
 
 class TestParseFile:
@@ -153,5 +153,105 @@ class TestIntegration:
 
         # Verify files were extracted
         assert (extract_dir / "debian-binary").exists()
-        assert (extract_dir / "control.tar.gz").exists()
-        assert (extract_dir / "data.tar.bz2").exists()
+        assert (extract_dir / "control").exists()
+        assert (extract_dir / "data").exists()
+
+
+class TestInspect:
+    def test_inspect(self, test_package_structure):
+        """Test the inspect command"""
+        package_dir = test_package_structure
+        output_deb = package_dir / "output.deb"
+
+        # Pack the package
+        pack_args = MagicMock()
+        pack_args.control = [
+            [{"content": (package_dir / "control" / "control").read_bytes(),
+              "name": "control", "mode": 0o644}]
+        ]
+        pack_args.data = [
+            [{"content": (package_dir / "data" / "bin" / "test-script").read_bytes(),
+              "name": "/usr/bin/test-script", "mode": 0o755}],
+            [{"content": (package_dir / "data" / "etc" / "test-package" / "config").read_bytes(),
+              "name": "/etc/test-package/config", "mode": 0o644}]
+        ]
+        pack_args.deb = str(output_deb)
+
+        # Run pack command
+        cli_pack(pack_args)
+
+        # Inspect arguments
+        inspect_args = MagicMock()
+        inspect_args.package = str(output_deb)
+
+        # Run inspect command
+        cli_inspect(inspect_args)
+
+        # Verify output
+        assert output_deb.exists()
+
+    def test_inspect_format_lst(self, test_package_structure):
+        """Test the inspect command with --format=ls"""
+        package_dir = test_package_structure
+        output_deb = package_dir / "output.deb"
+
+        # Pack the package
+        pack_args = MagicMock()
+        pack_args.control = [
+            [{"content": (package_dir / "control" / "control").read_bytes(),
+              "name": "control", "mode": 0o644}]
+        ]
+        pack_args.data = [
+            [{"content": (package_dir / "data" / "bin" / "test-script").read_bytes(),
+              "name": "/usr/bin/test-script", "mode": 0o755}],
+            [{"content": (package_dir / "data" / "etc" / "test-package" / "config").read_bytes(),
+              "name": "/etc/test-package/config", "mode": 0o644}]
+        ]
+        pack_args.deb = str(output_deb)
+
+        # Run pack command
+        cli_pack(pack_args)
+
+        # Inspect arguments
+        inspect_args = MagicMock()
+        inspect_args.package = str(output_deb)
+        inspect_args.format = 'ls'
+
+        # Run inspect command
+        cli_inspect(inspect_args)
+
+        # Verify output
+        assert output_deb.exists()
+
+    def test_inspect_format_find(self, test_package_structure):
+        """Test the inspect command with --format=find"""
+        package_dir = test_package_structure
+        output_deb = package_dir / "output.deb"
+
+        # Pack the package
+        pack_args = MagicMock()
+        pack_args.control = [
+            [{"content": (package_dir / "control" / "control").read_bytes(),
+              "name": "control", "mode": 0o644}]
+        ]
+        pack_args.data = [
+            [{"content": (package_dir / "data" / "bin" / "test-script").read_bytes(),
+              "name": "/usr/bin/test-script", "mode": 0o755}],
+            [{"content": (package_dir / "data" / "etc" / "test-package" / "config").read_bytes(),
+              "name": "/etc/test-package/config", "mode": 0o644}]
+        ]
+        pack_args.deb = str(output_deb)
+
+        # Run pack command
+        cli_pack(pack_args)
+
+        # Inspect arguments
+        inspect_args = MagicMock()
+        inspect_args.package = str(output_deb)
+        inspect_args.format = 'find'
+
+        # Run inspect command
+        cli_inspect(inspect_args)
+
+        # Verify output
+        assert output_deb.exists()
