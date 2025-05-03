@@ -28,17 +28,19 @@ class DebBuilder:
     def add_control_entry(
         self,
         name: str,
-        content: str,
+        content: Union[str, bytes],
         mode: int = 0o644,
         mtime: int = -1,
     ) -> None:
-        bytes_content = content.encode("utf-8")
+        if isinstance(content, str):
+            content = content.encode("utf-8")
+
         info = TarInfo(name)
         info.type = tarfile.REGTYPE
-        info.size = len(bytes_content)
+        info.size = len(content)
         info.mtime = mtime if mtime >= 0 else int(time.time())
         info.mode = mode
-        self.control_files[info.name] = TarInfoContent(tar_info=info, content=bytes_content)
+        self.control_files[info.name] = TarInfoContent(tar_info=info, content=content)
 
     def add_data_entry(
         self,
