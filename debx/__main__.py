@@ -1,4 +1,5 @@
 import logging
+import os
 from argparse import ArgumentParser, Namespace, ArgumentDefaultsHelpFormatter, RawTextHelpFormatter, ArgumentTypeError
 from pathlib import Path, PurePosixPath
 from typing import TypedDict, Iterable
@@ -75,7 +76,8 @@ def parse_file(file: str) -> Iterable[CLIFile]:
         dest_path = Path(dest)
         files = []
 
-        for subdir, dirs, subfiles in path.walk():
+        for subdir, dirs, subfiles in os.walk(path):
+            subdir = Path(subdir)
             for fname in subfiles:
                 subpath = Path(subdir) / fname
 
