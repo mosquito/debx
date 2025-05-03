@@ -1,6 +1,6 @@
 # debx
 
-[![Coverage Status](https://coveralls.io/repos/github/mosquito/debx/badge.svg?branch=master)](https://coveralls.io/github/mosquito/debx?branch=master) [![tests](https://github.com/mosquito/debx/actions/workflows/tests.yml/badge.svg)](https://github.com/mosquito/debx/actions/workflows/tests.yml)
+[![Coverage Status](https://coveralls.io/repos/github/mosquito/debx/badge.svg?branch=master)](https://coveralls.io/github/mosquito/debx?branch=master) [![tests](https://github.com/mosquito/debx/actions/workflows/tests.yml/badge.svg)](https://github.com/mosquito/debx/actions/workflows/tests.yml) ![PyPI - Version](https://img.shields.io/pypi/v/debx) ![PyPI - Types](https://img.shields.io/pypi/types/debx) ![PyPI - License](https://img.shields.io/pypi/l/debx)
 
 A lightweight Python library for creating, reading, and manipulating Debian package (.deb) files.
 
@@ -11,6 +11,7 @@ A lightweight Python library for creating, reading, and manipulating Debian pack
 - Parse and manipulate Debian control files (RFC822-style format)
 - Low-level AR archive manipulation
 - No external dependencies - uses only Python standard library
+- Command-line interface for creating and unpacking .deb packages
 
 ## Installation
 
@@ -100,6 +101,49 @@ control["Priority"] = "optional"
 # Write back to string
 print(control.dump())
 ```
+
+## Command-Line Interface
+
+debx includes a command-line interface for packing and unpacking Debian packages.
+
+### Packing a Debian Package
+
+The `pack` command allows you to create a .deb package from files on your system:
+
+```bash
+debx pack \
+    --control control:control \
+              preinst:preinst:mode=0755 \
+    --data src/binary:/usr/bin/example:mode=0755 \
+           src/config:/etc/example/config \
+           src/directory:/opt/example \
+    --output example.deb
+```
+
+The format for specifying files is:
+```
+source_path:destination_path[:modifiers]
+```
+
+Available modifiers:
+- `mode=0755` - Set file permissions
+- `uid=1000` - Set file owner ID
+- `gid=1000` - Set file group ID
+- `mtime=1234567890` - Set file modification time
+
+When specifying a directory, all files within that directory will be included in the package while preserving 
+the directory structure.
+
+### Unpacking a Debian Package
+
+The `unpack` command extracts a .deb package into a directory:
+
+```bash
+debx unpack package.deb --directory output_dir
+```
+
+This will extract the internal AR archive members (`debian-binary`, `control.tar.gz`, `data.tar.*`) 
+to the specified directory.
 
 ## License
 
