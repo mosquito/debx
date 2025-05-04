@@ -1,11 +1,14 @@
+import io
 import os
 from argparse import ArgumentTypeError
 
 import pytest
-from unittest.mock import  MagicMock
+from unittest.mock import MagicMock, patch
 
+from debx import ArFile, pack_ar_archive, unpack_ar_archive
 from debx.cli.inspect import cli_inspect
 from debx.cli.pack import parse_file, cli_pack
+from debx.cli.sign import cli_sign_extract_payload, cli_sign_write_signature, cli_sign
 from debx.cli.unpack import cli_unpack
 
 
@@ -255,3 +258,67 @@ class TestInspect:
 
         # Verify output
         assert output_deb.exists()
+
+
+@pytest.fixture
+def mock_package(tmp_path):
+    control_file = ArFile(name="control.tar.gz", content=b"control content", size=15)
+    data_file = ArFile(name="data.tar.gz", content=b"data content", size=12)
+    package_path = tmp_path / "test.deb"
+    package_path.write_bytes(pack_ar_archive(control_file, data_file))
+    return package_path
+
+
+def test_cli_sign_extract_payload(mock_package, capsys):
+    args = MagicMock()
+    args.package = mock_package
+    args.output = None
+
+    with patch("sys.stdout", new_callable=io.BytesIO) as mock_stdout:
+        mock_stdout.buffer = mock_stdout
+
+        result = cli_sign_extract_payload(args)
+        assert result == 0
+
+        output = mock_stdout.getvalue()
+        assert b"control content" in output
+        assert b"data content" in output
+
+
+def test_cli_sign_write_signature(mock_package, tmp_path):
+    signature = b"-----BEGIN PGP SIGNATURE-----\nMockSignature\n-----END PGP SIGNATURE-----"
+    output_path = tmp_path / "signed.deb"
+
+    args = MagicMock()
+    args.package = mock_package
+    args.output = output_path
+
+    with patch("sys.stdin", new=io.BytesIO(signature)) as mock_stdin:
+        mock_stdin.buffer = mock_stdin
+        result = cli_sign_write_signature(args)
+        assert result == 0
+
+    with output_path.open("rb") as f:
+        files = list(unpack_ar_archive(f))
+        assert any(file.name == "_gpgorigin" and file.content == signature for file in files)
+
+
+def test_cli_sign_invalid_arguments(mock_package):
+    args = MagicMock()
+    args.extract = True
+    args.update = True
+    args.package = mock_package
+    args.output = None
+
+    with patch("debx.cli.sign.log.error") as mock_log:
+        result = cli_sign(args)
+        assert result == 1
+        mock_log.assert_called_with("Cannot use --extract and --update at the same time")
+
+    args.extract = False
+    args.update = False
+
+    with patch("debx.cli.sign.log.error") as mock_log:
+        result = cli_sign(args)
+        assert result == 1
+        mock_log.assert_called_with("No action specified")

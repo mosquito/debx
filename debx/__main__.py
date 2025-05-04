@@ -1,10 +1,12 @@
 import logging
 from argparse import ArgumentParser
+from pathlib import Path
 
 from .cli.inspect import cli_inspect
 from .cli.pack import cli_pack, parse_file
 from .cli.types import Formatter
 from .cli.unpack import cli_unpack
+from .cli.sign import cli_sign
 
 
 PARSER = ArgumentParser(formatter_class=Formatter)
@@ -105,6 +107,42 @@ INSPECT_PARSER.add_argument(
 )
 INSPECT_PARSER.add_argument("package", help="Deb package to inspect")
 INSPECT_PARSER.set_defaults(func=cli_inspect)
+
+SIGN_DESCRIPTION = """
+This subcommand signs a .deb package using GPG. The signing process has following steps:
+
+1. Extract the payload from the .deb package
+2. Sign the payload using GPG
+3. Insert the signature into a new signed .deb package
+
+Example:
+
+debx sign --extract mypackage.deb | gpg --armor --detach-sign --output - | \
+debx sign --update mypackage.deb -o mypackage.signed.deb
+
+This extracts the payload, signs it via GPG, and embeds the signature as _gpgorigin into a new .deb package.
+"""
+
+SIGN_PARSER = SUBPARSERS.add_parser(
+    "sign", help="Sign a deb package using GPG", formatter_class=Formatter,
+    description=SIGN_DESCRIPTION,
+)
+SIGN_PARSER.add_argument(
+    "-e", "--extract", action="store_true",
+    help="Extract the payload from the deb package and write it to stdout",
+)
+SIGN_PARSER.add_argument(
+    "-u", "--update", action="store_true",
+    help="Update the deb package with the signature from stdin",
+)
+SIGN_PARSER.add_argument(
+    "-o", "--output", type=Path, default=None,
+    help="Output deb file name. By default same as package name but with signed suffix",
+)
+SIGN_PARSER.add_argument(
+    "package", help="Deb package to extract or update", type=Path
+)
+SIGN_PARSER.set_defaults(func=cli_sign)
 
 
 def main() -> None:

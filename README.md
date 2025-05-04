@@ -167,6 +167,20 @@ debx inspect --format=json package.deb
 
 See the `--help` option for more details on available formats.
 
+### Package signing
+
+The `sign` command allows you to sign a .deb package using GPG:
+
+```bash
+debx sign --extract mypackage.deb | \
+  gpg --armor --detach-sign --output - | \
+  debx sign --update mypackage.deb -o mypackage.signed.deb
+```
+
+This will extract the package, sign it with GPG, and update the package with the signature.
+The `--extract` option extracts the package payload and streams it to stdout, which is then signed with GPG.
+The `--update` option updates the package with the signature.
+
 ## License
 
 [MIT License](COPYING)
