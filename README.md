@@ -5,7 +5,7 @@
 ![debx logo](https://raw.githubusercontent.com/mosquito/debx/master/logo.png "Logo")
 
 Pronounced "deb-ex", `debx` is a Python library for creating, reading, and manipulating Debian package files.
-This pacage includes the `debx` command-line tool for packing and unpacking and inspecting any .deb packages.
+This package includes the `debx` command-line tool for packing, unpacking, and inspecting any .deb packages.
 
 ## Features
 
