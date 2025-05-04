@@ -1,5 +1,6 @@
 import csv
 import datetime
+import hashlib
 import io
 import json
 import locale
@@ -163,6 +164,10 @@ def format_json(items: list[InspectItem]) -> str:
 
 def cli_inspect(args: Namespace) -> int:
     data = []
+    md5sums = {}
+    control_tar = None
+    control_tar_mode = None
+
     with open(args.package, "rb") as package_fp:
         for entry in unpack_ar_archive(package_fp):
             log.debug("Package entry: %s", entry.name)
@@ -177,6 +182,7 @@ def cli_inspect(args: Namespace) -> int:
                         uid=entry.uid,
                         gid=entry.gid,
                         mtime=entry.mtime,
+                        md5=hashlib.md5(entry.content).hexdigest(),
                         path=None,
                     ),
                 )
@@ -190,7 +196,24 @@ def cli_inspect(args: Namespace) -> int:
             elif entry.name.endswith(".tar.bz2"):
                 mode = "r:bz2"
 
+            if entry.name.startswith("control.tar"):
+                control_tar = entry
+                control_tar_mode = mode
+
             with tarfile.open(fileobj=entry.fp, mode=mode) as tar:
+                data.append(
+                    InspectItem(
+                        file=entry.name,
+                        size=entry.size,
+                        type=TarInfoType.regular.name,
+                        mode=entry.mode,
+                        uid=entry.uid,
+                        gid=entry.gid,
+                        mtime=entry.mtime,
+                        md5=hashlib.md5(entry.content).hexdigest(),
+                        path=None,
+                    ),
+                )
                 for tarinfo in tar:
                     log.debug("Tar entry: %s", tarinfo.name)
                     data.append(
@@ -202,9 +225,28 @@ def cli_inspect(args: Namespace) -> int:
                             uid=tarinfo.uid,
                             gid=tarinfo.gid,
                             mtime=tarinfo.mtime,
-                            path=tarinfo.path,
+                            path=tarinfo.name,
+                            md5=None,
                         ),
                     )
+
+    if control_tar:
+        with tarfile.open(fileobj=control_tar.fp, mode=control_tar_mode) as tar:
+            for tarinfo in tar:
+                log.debug("Control entry: %s", tarinfo.name)
+                if tarinfo.name != "md5sums":
+                    continue
+
+                for md5line in tar.extractfile(tarinfo).read().decode().splitlines():
+                    md5sum, path = md5line.split(maxsplit=1)
+                    md5sums[path.strip()] = md5sum.strip()
+                break
+
+    for item in data:
+        if not item['file'].startswith("data.tar"):
+            continue
+
+        item["md5"] = md5sums.get(item["path"], None)
 
     formatters = {
         "json": format_json,

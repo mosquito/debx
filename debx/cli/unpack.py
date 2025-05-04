@@ -1,4 +1,5 @@
 import logging
+import sys
 import tarfile
 from argparse import Namespace
 from pathlib import Path
@@ -41,7 +42,9 @@ def cli_unpack(args: Namespace) -> int:
                 log.info("Extracting %s/%s", target_dir, tarinfo.name)
                 return tarinfo
 
-            tar.extractall(path=target_dir, filter=extract_filter)
+
+            kw = {'filter': extract_filter} if sys.version_info >= (3, 12) else {}
+            tar.extractall(path=target_dir, **kw)
 
         log.info("Removing packed %s", file.name)
         file.unlink()

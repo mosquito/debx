@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import sys
 from argparse import ArgumentTypeError, Namespace
 from pathlib import Path, PurePosixPath
@@ -33,17 +34,28 @@ def make_file(path: Path, dest: str, **kwargs) -> CLIFile:
 
     return CLIFile(**kwargs)
 
+FILE_REGEXP = re.compile(r"^(?P<src>(?:[A-Za-z]:)?[^:]+):(?P<dest>(?:[A-Za-z]:)?[^:]+)(?::(?P<mods>.*))?$")
 
 def parse_file(file: str) -> Iterable[CLIFile]:
     result = {}
     if ":" not in file:
         raise ArgumentTypeError(f"Invalid file format: {file!r} (should be src:dest[:modifiers])")
-    src, dest = file.split(":", 1)
-    if ":" in dest:
-        dest, modifiers = dest.split(":", 1)
-        for modifier in modifiers.split(","):
-            key, value = modifier.split("=")
-            result[key] = value
+
+    match = FILE_REGEXP.match(file)
+    if match is None:
+        raise ArgumentTypeError(f"Invalid file format: {file!r}")
+
+    groups = match.groupdict()
+
+    src = groups["src"]
+    dest = groups["dest"]
+    modifiers = groups.get("mods", "") or ""
+
+    for modifier in modifiers.split(","):
+        if not modifier:
+            continue
+        key, value = modifier.split("=")
+        result[key] = value
 
     if "uid" in result:
         result["uid"] = int(result["uid"])
@@ -61,7 +73,7 @@ def parse_file(file: str) -> Iterable[CLIFile]:
             sys.stderr.write(
                 f"{path} is a directory. Ignoring the mode for directories. Will be set from the original files\n",
             )
-        dest_path = Path(dest)
+        dest_path = PurePosixPath(dest)
         files = []
 
         for subdir, dirs, subfiles in os.walk(path):
@@ -73,7 +85,7 @@ def parse_file(file: str) -> Iterable[CLIFile]:
                 files.append(
                     make_file(
                         subpath,
-                        str(dest_path / subpath.relative_to(path)),
+                        str(PurePosixPath("/", *dest_path.parts) / PurePosixPath(*subpath.relative_to(path).parts)),
                         uid=result.get("uid", stat.st_uid),
                         gid=result.get("gid", stat.st_gid),
                         mode=stat.st_mode & 0o777,

@@ -9,6 +9,7 @@ This package includes the `debx` command-line tool for packing, unpacking, and i
 
 ## Features
 
+- Cross-platform support for creating and unpacking .deb packages. Yes you can create .deb packages on Windows!
 - Read and extract content from Debian packages
 - Create custom Debian packages programmatically
 - Parse and manipulate Debian control files (RFC822-style format)

@@ -37,6 +37,7 @@ class InspectItem(TypedDict):
     uid: Optional[int]
     gid: Optional[int]
     mtime: Optional[int]
+    md5: Optional[str]
     path: Optional[str]
 
 

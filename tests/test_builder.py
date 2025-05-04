@@ -3,7 +3,7 @@ import io
 import tarfile
 
 import pytest
-from pathlib import PurePosixPath
+from pathlib import PurePosixPath, Path
 
 from debx import unpack_ar_archive, DebBuilder
 
@@ -65,8 +65,8 @@ def test_directory_creation(builder):
 
     assert len(builder.directories) == 3
     dirs = sorted(builder.directories)
-    assert str(dirs[0]) == "/var"
-    assert str(dirs[1]) == "/var/lib"
+    assert Path(str(dirs[0])) == Path("/var")
+    assert Path(str(dirs[1])) == Path("/var/lib")
 
 
 def test_pack_roundtrip(builder, tmp_path):
