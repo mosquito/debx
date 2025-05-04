@@ -83,6 +83,10 @@ UNPACK_PARSER.add_argument(
     "-d", "--directory",
     help="Directory to unpack the package into, defaults to the package name without .deb extension",
 )
+UNPACK_PARSER.add_argument(
+    "-k", "--keep-archives", action="store_true",
+    help="Keep the original tar archives in the unpacked directory after extraction",
+)
 UNPACK_PARSER.set_defaults(func=cli_unpack)
 
 

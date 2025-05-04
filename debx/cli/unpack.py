@@ -42,11 +42,11 @@ def cli_unpack(args: Namespace) -> int:
                 log.info("Extracting %s/%s", target_dir, tarinfo.name)
                 return tarinfo
 
-
             kw = {'filter': extract_filter} if sys.version_info >= (3, 12) else {}
             tar.extractall(path=target_dir, **kw)
 
-        log.info("Removing packed %s", file.name)
-        file.unlink()
+        if not args.keep_archives:
+            log.info("Removing packed %s", file.name)
+            file.unlink()
 
     return 0
