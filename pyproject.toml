@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "debx"
-version = "0.2.7"
+version = "0.2.8"
 description = "Minimal Python library to programmatically construct Debian .deb packages"
 readme = "README.md"
 authors = [

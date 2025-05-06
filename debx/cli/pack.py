@@ -16,15 +16,18 @@ log = logging.getLogger(__name__)
 def make_file(path: Path, dest: str, **kwargs) -> CLIFile:
     stat = path.stat()
     kwargs["content"] = path.read_bytes()
-    kwargs["name"] = PurePosixPath(dest)
 
-    if not kwargs["name"].is_absolute():
-        raise ArgumentTypeError(f"Destination path must be absolute: \"{kwargs['name']!s}\"")
+    dest_path = PurePosixPath(dest)
+
+    if not dest_path.is_absolute():
+        raise ArgumentTypeError(f"Destination path must be absolute: \"{dest_path!s}\"")
+
+    kwargs["name"] = str(dest)
 
     if "uid" not in kwargs:
-        kwargs["uid"] = stat.st_uid
+        kwargs["uid"] = 0
     if "gid" not in kwargs:
-        kwargs["gid"] = stat.st_gid
+        kwargs["gid"] = 0
     if "mtime" not in kwargs:
         kwargs["mtime"] = int(stat.st_mtime)
     if "mode" not in kwargs:
@@ -94,7 +97,7 @@ def parse_file(file: str) -> Iterable[CLIFile]:
                 )
         return files
     elif path.is_file() or path.is_symlink():
-        return [make_file(path, dest, **result)]
+        return [make_file(path, str(dest), **result)]
 
     raise ArgumentTypeError(f"File type is not supported: {file!r} (should be file symlink or directory)")
 
@@ -106,6 +109,9 @@ def cli_pack(args: Namespace) -> int:
         for file in files:
             file.pop("symlink_to", None)
             log.info("Adding control file: %s", file["name"])
+            file.pop("uid", None)
+            file.pop("gid", None)
+            file.pop("symlink_to", None)
             builder.add_control_entry(**file)
 
     for files in args.data:

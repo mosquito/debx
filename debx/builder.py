@@ -35,7 +35,11 @@ class DebBuilder:
         if isinstance(content, str):
             content = content.encode("utf-8")
 
-        info = TarInfo(name)
+        file_path = PurePosixPath(name)
+        if file_path.is_absolute():
+            file_path = file_path.relative_to("/")
+
+        info = TarInfo(str(file_path))
         info.type = tarfile.REGTYPE
         info.size = len(content)
         info.mtime = mtime if mtime >= 0 else int(time.time())
@@ -92,7 +96,7 @@ class DebBuilder:
 
     def create_control_tar(self) -> bytes:
         md5sums = io.BytesIO()
-        for path, md5sum in self.md5sums.items():
+        for path, md5sum in sorted(self.md5sums.items(), key=lambda x: x[0]):
             rel_path = path.relative_to("/") if path.is_absolute() else path
             md5sums.write(f"{md5sum}  {rel_path}\n".encode("utf-8"))
 

@@ -116,8 +116,8 @@ The `pack` command allows you to create a .deb package from files on your system
 
 ```bash
 debx pack \
-    --control control:control \
-              preinst:preinst:mode=0755 \
+    --control control:/control \
+              preinst:/preinst:mode=0755 \
     --data src/binary:/usr/bin/example:mode=0755 \
            src/config:/etc/example/config \
            src/directory:/opt/example \
@@ -126,14 +126,14 @@ debx pack \
 
 The format for specifying files is:
 ```
-source_path:destination_path[:modifiers]
+source_path:absolute_destination_path[:modifiers]
 ```
 
 Available modifiers:
-- `mode=0755` - Set file permissions
-- `uid=1000` - Set file owner ID
-- `gid=1000` - Set file group ID
-- `mtime=1234567890` - Set file modification time
+- `uid=1000` - Set file owner ID (by default is 0)
+- `gid=1000` - Set file group ID (by default is 0)
+- `mode=0755` - Set file permissions (by default is a source file mode will be kept)
+- `mtime=1234567890` - Set file modification time (by default a source file mtime will be kept)
 
 When specifying a directory, all files within that directory will be included in the package while preserving 
 the directory structure.
