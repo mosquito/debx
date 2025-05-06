@@ -126,10 +126,10 @@ debx pack \
 
 The format for specifying files is:
 ```
-source_path:absolute_destination_path[:modifiers]
+source_path:absolute_destination_path[:modifier1,modifier2,...]
 ```
 
-Available modifiers:
+Modifiers is comma-separated list of options:
 - `uid=1000` - Set file owner ID (by default is 0)
 - `gid=1000` - Set file group ID (by default is 0)
 - `mode=0755` - Set file permissions (by default is a source file mode will be kept)
@@ -137,6 +137,22 @@ Available modifiers:
 
 When specifying a directory, all files within that directory will be included in the package while preserving 
 the directory structure.
+
+Usually deb control files is:
+
+* `control` - package metadata in Deb822 format. You can find more information about the control file format in the 
+  [Debian Policy Manual](https://www.debian.org/doc/debian-policy/ch-controlfields.html)
+* `preinst` - script to be executed before the package is installed
+* `postinst` - script to be executed after the package is installed
+* `prerm` - script to be executed before the package is removed
+* `postrm` - script to be executed after the package is removed
+* `md5sums` - list of files and their md5 checksums (generated automatically)
+* `conffiles` - list of configuration files
+* `triggers` - list of triggers
+* `triggers-file` - list of files for triggers
+
+A full list of control files can be found in the 
+[Debian Policy Manual](https://www.debian.org/doc/debian-policy/ch-maintainerscripts.html).
 
 ### Unpacking a Debian Package
 

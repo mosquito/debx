@@ -102,6 +102,7 @@ class DebBuilder:
 
         md5sums_info = TarInfo("md5sums")
         md5sums_info.size = md5sums.tell()
+        md5sums_info.mtime = int(time.time())
         md5sums.seek(0)
 
         with io.BytesIO() as tarfp:
