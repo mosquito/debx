@@ -1,328 +1,235 @@
+"""
+Tests for CLI inspect command formatting and output.
+"""
+import csv
 import io
-import os
-from argparse import ArgumentTypeError
+import json
+import stat
+import time
+from argparse import Namespace
+from unittest.mock import patch
 
 import pytest
-from unittest.mock import MagicMock, patch
 
-from debx import ArFile, pack_ar_archive, unpack_ar_archive, DebBuilder, Deb822
+from debx import ArFile, pack_ar_archive, DebBuilder, Deb822
 from debx.cli.inspect import cli_inspect, format_ls, format_csv, format_json
-from debx.cli.pack import parse_file, cli_pack
-from debx.cli.sign import cli_sign_extract_payload, cli_sign_write_signature, cli_sign
 from debx.cli.types import InspectItem, TarInfoType
-from debx.cli.unpack import cli_unpack
 
 
-class TestParseFile:
-    def test_invalid_format(self):
-        """Test that parse_file raises an error for invalid formats"""
-        with pytest.raises(ArgumentTypeError, match="Invalid file format"):
-            list(parse_file("no_colon_here"))
+class TestStatModeFallback:
+    """Tests for stat mode fallback in format_mode."""
 
-    def test_simple_file(self, tmp_path):
-        """Test parsing a simple file with no modifiers"""
-        test_file = tmp_path / "test.txt"
-        test_file.write_text("test content")
-
-        result = list(parse_file(f"{test_file}:/dest/path"))
-        assert len(result) == 1
-        assert str(result[0]["name"]) == "/dest/path"
-        assert result[0]["content"] == b"test content"
-
-    def test_file_with_modifiers(self, tmp_path):
-        """Test parsing a file with modifiers"""
-        test_file = tmp_path / "test.txt"
-        test_file.write_text("test content")
-
-        result = list(parse_file(f"{test_file}:/dest/path:mode=0755,uid=1000,gid=2000,mtime=1234567890"))
-        assert len(result) == 1
-        assert str(result[0]["name"]) == "/dest/path"
-        assert result[0]["content"] == b"test content"
-        assert result[0]["mode"] == 0o755
-        assert result[0]["uid"] == 1000
-        assert result[0]["gid"] == 2000
-        assert result[0]["mtime"] == 1234567890
-
-    def test_directory(self, tmp_path):
-        """Test parsing a directory"""
-        test_dir = tmp_path / "test_dir"
-        test_dir.mkdir()
-
-        file1 = test_dir / "file1.txt"
-        file1.write_text("file1 content")
-
-        subdir = test_dir / "subdir"
-        subdir.mkdir()
-
-        file2 = subdir / "file2.txt"
-        file2.write_text("file2 content")
-
-        result = list(parse_file(f"{test_dir}:/dest/path"))
-        assert len(result) == 2
-
-        # Sort results to ensure consistent order for testing
-        result.sort(key=lambda x: str(x["name"]))
-
-        assert str(result[0]["name"]) == "/dest/path/file1.txt"
-        assert result[0]["content"] == b"file1 content"
-
-        assert str(result[1]["name"]) == "/dest/path/subdir/file2.txt"
-        assert result[1]["content"] == b"file2 content"
-
-    def test_relative_path_error(self, tmp_path):
-        """Test that relative destination paths raise an error"""
-        test_file = tmp_path / "test.txt"
-        test_file.write_text("test content")
-
-        with pytest.raises(ArgumentTypeError, match="Destination path must be absolute"):
-            list(parse_file(f"{test_file}:relative/path"))
-
-
-@pytest.fixture
-def test_package_structure(tmp_path):
-    """Create a test package structure for integration tests"""
-    # Create some control files
-    control_dir = tmp_path / "control"
-    control_dir.mkdir()
-
-    control_file = control_dir / "control"
-    control_file.write_text(
-        "Package: test-package\n"
-        "Version: 1.0.0\n"
-        "Architecture: all\n"
-        "Maintainer: Test <test@example.com>\n"
-        "Description: Test package\n"
-        " This is a test package for testing purposes.\n"
-    )
-
-    # Create some data files
-    data_dir = tmp_path / "data"
-    data_dir.mkdir()
-
-    bin_dir = data_dir / "bin"
-    bin_dir.mkdir(parents=True)
-
-    bin_file = bin_dir / "test-script"
-    bin_file.write_text("#!/bin/sh\necho 'Hello, world!'\n")
-    bin_file.chmod(0o755)
-
-    etc_dir = data_dir / "etc" / "test-package"
-    etc_dir.mkdir(parents=True)
-
-    config_file = etc_dir / "config"
-    config_file.write_text("# Test configuration\nSETTING=value\n")
-
-    return tmp_path
-
-
-class TestIntegration:
-    def test_pack_and_unpack(self, test_package_structure, tmp_path):
-        """Integration test for packing and unpacking a deb package"""
-        # Skip if running in CI without proper permissions
-        if "CI" in os.environ:
-            pytest.skip("Skipping integration test in CI environment")
-
-        package_dir = test_package_structure
-        output_deb = tmp_path / "output.deb"
-        extract_dir = tmp_path / "extract"
-        extract_dir.mkdir()
-
-        # Pack arguments
-        pack_args = MagicMock()
-        pack_args.control = [
-            [{"content": (package_dir / "control" / "control").read_bytes(),
-              "name": "control", "mode": 0o644}]
+    def test_format_ls_type_none_regular_mode(self):
+        """Test format_ls with type=None and regular file mode."""
+        regular_mode = 0o100644  # Regular file with 644 permissions
+        items = [
+            InspectItem(
+                file="regular.txt",
+                size=100,
+                type=None,
+                mode=regular_mode,
+                uid=0,
+                gid=0,
+                mtime=int(time.time()),
+                md5=None,
+                path=None,
+            )
         ]
-        pack_args.data = [
-            [{"content": (package_dir / "data" / "bin" / "test-script").read_bytes(),
-              "name": "/usr/bin/test-script", "mode": 0o755}],
-            [{"content": (package_dir / "data" / "etc" / "test-package" / "config").read_bytes(),
-              "name": "/etc/test-package/config", "mode": 0o644}]
+        result = format_ls(items)
+        lines = result.strip().split('\n')
+        # Should show as regular file with '-' prefix
+        assert any('-rw-r--r--' in line for line in lines)
+
+    def test_format_ls_type_none_dir_mode(self):
+        """Test format_ls with type=None and directory mode."""
+        dir_mode = stat.S_IFDIR | 0o755  # Directory with 755 permissions
+        items = [
+            InspectItem(
+                file="mydir",
+                size=0,
+                type=None,
+                mode=dir_mode,
+                uid=0,
+                gid=0,
+                mtime=int(time.time()),
+                md5=None,
+                path=None,
+            )
         ]
-        pack_args.deb = str(output_deb)
+        result = format_ls(items)
+        lines = result.strip().split('\n')
+        # Should show as directory with 'd' prefix
+        assert any('drwxr-xr-x' in line for line in lines)
 
-        # Run pack command
-        cli_pack(pack_args)
-
-        # Verify deb file was created
-        assert output_deb.exists()
-
-        # Unpack arguments
-        unpack_args = MagicMock()
-        unpack_args.package = str(output_deb)
-        unpack_args.directory = str(extract_dir)
-
-        # Run unpack command
-        cli_unpack(unpack_args)
-
-        # Verify files were extracted
-        assert (extract_dir / "debian-binary").exists()
-        assert (extract_dir / "control").exists()
-        assert (extract_dir / "data").exists()
-
-
-class TestInspect:
-    def test_inspect(self, test_package_structure):
-        """Test the inspect command"""
-        package_dir = test_package_structure
-        output_deb = package_dir / "output.deb"
-
-        # Pack the package
-        pack_args = MagicMock()
-        pack_args.control = [
-            [{"content": (package_dir / "control" / "control").read_bytes(),
-              "name": "control", "mode": 0o644}]
+    def test_format_ls_type_none_symlink_mode(self):
+        """Test format_ls with type=None and symlink mode."""
+        link_mode = stat.S_IFLNK | 0o777  # Symlink with 777 permissions
+        items = [
+            InspectItem(
+                file="mylink",
+                size=0,
+                type=None,
+                mode=link_mode,
+                uid=0,
+                gid=0,
+                mtime=int(time.time()),
+                md5=None,
+                path=None,
+            )
         ]
-        pack_args.data = [
-            [{"content": (package_dir / "data" / "bin" / "test-script").read_bytes(),
-              "name": "/usr/bin/test-script", "mode": 0o755}],
-            [{"content": (package_dir / "data" / "etc" / "test-package" / "config").read_bytes(),
-              "name": "/etc/test-package/config", "mode": 0o644}]
+        result = format_ls(items)
+        lines = result.strip().split('\n')
+        # Should show as symlink with 'l' prefix
+        assert any('lrwxrwxrwx' in line for line in lines)
+
+    def test_format_ls_unknown_type_dir_mode_fallback(self):
+        """Test format_ls with unknown type that falls back to stat dir check."""
+        # Use an unknown type string but with directory mode
+        dir_mode = stat.S_IFDIR | 0o755
+        items = [
+            InspectItem(
+                file="unknown_dir",
+                size=0,
+                type="unknown_custom_type",  # Not a recognized type
+                mode=dir_mode,
+                uid=0,
+                gid=0,
+                mtime=int(time.time()),
+                md5=None,
+                path=None,
+            )
         ]
-        pack_args.deb = str(output_deb)
+        result = format_ls(items)
+        lines = result.strip().split('\n')
+        # Should fall back to stat check and show 'd'
+        assert any('d' in line for line in lines[1:])
 
-        # Run pack command
-        cli_pack(pack_args)
-
-        # Inspect arguments
-        inspect_args = MagicMock()
-        inspect_args.package = str(output_deb)
-
-        # Run inspect command
-        cli_inspect(inspect_args)
-
-        # Verify output
-        assert output_deb.exists()
-
-    def test_inspect_format_lst(self, test_package_structure):
-        """Test the inspect command with --format=ls"""
-        package_dir = test_package_structure
-        output_deb = package_dir / "output.deb"
-
-        # Pack the package
-        pack_args = MagicMock()
-        pack_args.control = [
-            [{"content": (package_dir / "control" / "control").read_bytes(),
-              "name": "control", "mode": 0o644}]
+    def test_format_ls_unknown_type_symlink_mode_fallback(self):
+        """Test format_ls with unknown type that falls back to stat symlink check."""
+        # Use an unknown type string but with symlink mode
+        link_mode = stat.S_IFLNK | 0o777
+        items = [
+            InspectItem(
+                file="unknown_link",
+                size=0,
+                type="unknown_custom_type",  # Not a recognized type
+                mode=link_mode,
+                uid=0,
+                gid=0,
+                mtime=int(time.time()),
+                md5=None,
+                path=None,
+            )
         ]
-        pack_args.data = [
-            [{"content": (package_dir / "data" / "bin" / "test-script").read_bytes(),
-              "name": "/usr/bin/test-script", "mode": 0o755}],
-            [{"content": (package_dir / "data" / "etc" / "test-package" / "config").read_bytes(),
-              "name": "/etc/test-package/config", "mode": 0o644}]
-        ]
-        pack_args.deb = str(output_deb)
-
-        # Run pack command
-        cli_pack(pack_args)
-
-        # Inspect arguments
-        inspect_args = MagicMock()
-        inspect_args.package = str(output_deb)
-        inspect_args.format = 'ls'
-
-        # Run inspect command
-        cli_inspect(inspect_args)
-
-        # Verify output
-        assert output_deb.exists()
-
-    def test_inspect_format_find(self, test_package_structure):
-        """Test the inspect command with --format=find"""
-        package_dir = test_package_structure
-        output_deb = package_dir / "output.deb"
-
-        # Pack the package
-        pack_args = MagicMock()
-        pack_args.control = [
-            [{"content": (package_dir / "control" / "control").read_bytes(),
-              "name": "control", "mode": 0o644}]
-        ]
-        pack_args.data = [
-            [{"content": (package_dir / "data" / "bin" / "test-script").read_bytes(),
-              "name": "/usr/bin/test-script", "mode": 0o755}],
-            [{"content": (package_dir / "data" / "etc" / "test-package" / "config").read_bytes(),
-              "name": "/etc/test-package/config", "mode": 0o644}]
-        ]
-        pack_args.deb = str(output_deb)
-
-        # Run pack command
-        cli_pack(pack_args)
-
-        # Inspect arguments
-        inspect_args = MagicMock()
-        inspect_args.package = str(output_deb)
-        inspect_args.format = 'find'
-
-        # Run inspect command
-        cli_inspect(inspect_args)
-
-        # Verify output
-        assert output_deb.exists()
+        result = format_ls(items)
+        lines = result.strip().split('\n')
+        # Should fall back to stat check and show 'l'
+        assert any('l' in line for line in lines[1:])
 
 
-@pytest.fixture
-def mock_package(tmp_path):
-    control_file = ArFile(name="control.tar.gz", content=b"control content", size=15)
-    data_file = ArFile(name="data.tar.gz", content=b"data content", size=12)
-    package_path = tmp_path / "test.deb"
-    package_path.write_bytes(pack_ar_archive(control_file, data_file))
-    return package_path
+class TestFormatTimeLocale:
+    """Tests for format_time locale handling."""
+
+    def test_format_time_without_locale(self):
+        """Test _format_time without user_locale."""
+        from debx.cli.inspect import _format_time
+
+        current_time = int(time.time())
+        result = _format_time(current_time)
+        assert len(result) > 0
+
+    def test_format_time_with_none_mtime(self):
+        """Test _format_time with None mtime."""
+        from debx.cli.inspect import _format_time
+
+        result = _format_time(None)
+        assert result == "         "
+
+    def test_format_time_with_valid_locale(self):
+        """Test _format_time with a valid locale."""
+        from debx.cli.inspect import _format_time
+        import locale
+
+        current_time = int(time.time())
+
+        # Use 'C' locale which should always be available
+        result = _format_time(current_time, user_locale='C')
+        assert len(result) > 0
+
+    def test_format_time_with_invalid_locale_on_set(self):
+        """Test _format_time when setting locale fails."""
+        from debx.cli.inspect import _format_time
+        import locale
+
+        current_time = int(time.time())
+        original_setlocale = locale.setlocale
+
+        def mock_setlocale(category, loc=None):
+            if loc is not None and loc not in (None, '', ('en_US', 'UTF-8'), ('C', 'UTF-8'), 'C'):
+                raise locale.Error("Invalid locale")
+            return original_setlocale(category, loc)
+
+        with patch.object(locale, 'setlocale', side_effect=mock_setlocale):
+            # This should not raise, just silently ignore the locale error
+            result = _format_time(current_time, user_locale='invalid_locale_xyz')
+            assert len(result) > 0
+
+    def test_format_time_with_locale_restore_error(self):
+        """Test _format_time when restoring locale fails and falls back to 'C'."""
+        from debx.cli.inspect import _format_time
+        import locale
+
+        current_time = int(time.time())
+        original_setlocale = locale.setlocale
+        call_count = [0]
+
+        def mock_setlocale(category, loc=None):
+            call_count[0] += 1
+            # First call: getlocale returns tuple
+            # Second call: setting user_locale - allow it
+            # Third call: restoring old locale - fail
+            # Fourth call: fallback to 'C' - allow it
+            if call_count[0] == 3:
+                # Fail when trying to restore old locale
+                raise locale.Error("Cannot restore locale")
+            if loc == 'C' or loc is None:
+                return original_setlocale(category, loc)
+            # Allow setting user_locale
+            return original_setlocale(category, 'C')
+
+        with patch.object(locale, 'setlocale', side_effect=mock_setlocale):
+            with patch.object(locale, 'getlocale', return_value=('invalid', 'locale')):
+                # This should not raise, should fallback to 'C'
+                result = _format_time(current_time, user_locale='C')
+                assert len(result) > 0
 
 
-def test_cli_sign_extract_payload(mock_package, capsys):
-    args = MagicMock()
-    args.package = mock_package
-    args.output = None
+class TestFormatSizeDecimal:
+    """Tests for _format_size with decimal values."""
 
-    with patch("sys.stdout", new_callable=io.BytesIO) as mock_stdout:
-        mock_stdout.buffer = mock_stdout
+    def test_format_size_decimal(self):
+        """Test _format_size with sizes that result in decimal values."""
+        from debx.cli.inspect import _format_size
 
-        result = cli_sign_extract_payload(args)
-        assert result == 0
+        # 1536 bytes = 1.5K (not an integer)
+        result = _format_size(1536)
+        assert result == "1.5K"
 
-        output = mock_stdout.getvalue()
-        assert b"control content" in output
-        assert b"data content" in output
+        # 2560 bytes = 2.5K
+        result = _format_size(2560)
+        assert result == "2.5K"
 
+    def test_format_size_integer(self):
+        """Test _format_size with sizes that result in integer values."""
+        from debx.cli.inspect import _format_size
 
-def test_cli_sign_write_signature(mock_package, tmp_path):
-    signature = b"-----BEGIN PGP SIGNATURE-----\nMockSignature\n-----END PGP SIGNATURE-----"
-    output_path = tmp_path / "signed.deb"
+        # 1024 bytes = 1K (integer)
+        result = _format_size(1024)
+        assert result == "1K"
 
-    args = MagicMock()
-    args.package = mock_package
-    args.output = output_path
-
-    with patch("sys.stdin", new=io.BytesIO(signature)) as mock_stdin:
-        mock_stdin.buffer = mock_stdin
-        result = cli_sign_write_signature(args)
-        assert result == 0
-
-    with output_path.open("rb") as f:
-        files = list(unpack_ar_archive(f))
-        assert any(file.name == "_gpgorigin" and file.content == signature for file in files)
-
-
-def test_cli_sign_invalid_arguments(mock_package):
-    args = MagicMock()
-    args.extract = True
-    args.update = True
-    args.package = mock_package
-    args.output = None
-
-    with patch("debx.cli.sign.log.error") as mock_log:
-        result = cli_sign(args)
-        assert result == 1
-        mock_log.assert_called_with("Cannot use --extract and --update at the same time")
-
-    args.extract = False
-    args.update = False
-
-    with patch("debx.cli.sign.log.error") as mock_log:
-        result = cli_sign(args)
-        assert result == 1
-        mock_log.assert_called_with("No action specified")
+        # 2048 bytes = 2K (integer)
+        result = _format_size(2048)
+        assert result == "2K"
 
 
 class TestInspectFormatting:
@@ -636,243 +543,6 @@ class TestCliInspect:
         assert "Unknown format" in mock_stderr.getvalue()
 
 
-class TestCliSign:
-    """Tests for CLI sign command."""
-
-    def test_sign_extract_tty_error(self, tmp_path):
-        """Test sign extract when stdout is tty."""
-        pkg_path = tmp_path / "test.deb"
-        pkg_path.write_bytes(b"dummy")
-
-        args = Namespace(package=pkg_path, extract=True, update=False, output=None)
-
-        with patch("sys.stdout.isatty", return_value=True):
-            result = cli_sign_extract_payload(args)
-
-        assert result == 1
-
-    def test_sign_extract_no_control(self, tmp_path):
-        """Test sign extract when control file is missing."""
-        # Create package without control
-        ar_content = pack_ar_archive(
-            ArFile.from_bytes(b"2.0\n", "debian-binary"),
-            ArFile.from_bytes(b"data", "data.tar.bz2"),
-        )
-        pkg_path = tmp_path / "test.deb"
-        pkg_path.write_bytes(ar_content)
-
-        args = Namespace(package=pkg_path)
-
-        with patch("sys.stdout.isatty", return_value=False):
-            result = cli_sign_extract_payload(args)
-
-        assert result == 1
-
-    def test_sign_extract_no_data(self, tmp_path):
-        """Test sign extract when data file is missing."""
-        ar_content = pack_ar_archive(
-            ArFile.from_bytes(b"2.0\n", "debian-binary"),
-            ArFile.from_bytes(b"control", "control.tar.gz"),
-        )
-        pkg_path = tmp_path / "test.deb"
-        pkg_path.write_bytes(ar_content)
-
-        args = Namespace(package=pkg_path)
-
-        with patch("sys.stdout.isatty", return_value=False):
-            result = cli_sign_extract_payload(args)
-
-        assert result == 1
-
-    def test_sign_write_invalid_signature(self, tmp_path):
-        """Test sign write with invalid signature."""
-        builder = DebBuilder()
-        control = Deb822({
-            "Package": "test",
-            "Version": "1.0",
-            "Architecture": "all",
-            "Maintainer": "Test <test@test.com>",
-            "Description": "Test",
-        })
-        builder.add_control_entry("control", control.dump())
-        builder.add_data_entry(b"content", "/usr/bin/test")
-
-        pkg_path = tmp_path / "test.deb"
-        pkg_path.write_bytes(builder.pack())
-
-        output_path = tmp_path / "signed.deb"
-        args = Namespace(package=pkg_path, output=output_path)
-
-        with patch("sys.stdin.buffer.read", return_value=b"invalid signature"):
-            result = cli_sign_write_signature(args)
-
-        assert result == 1
-
-    def test_sign_both_flags_error(self, tmp_path):
-        """Test sign with both --extract and --update."""
-        pkg_path = tmp_path / "test.deb"
-        pkg_path.write_bytes(b"dummy")
-
-        args = Namespace(package=pkg_path, extract=True, update=True, output=None)
-        result = cli_sign(args)
-
-        assert result == 1
-
-    def test_sign_extract_with_output_error(self, tmp_path):
-        """Test sign extract with --output flag."""
-        pkg_path = tmp_path / "test.deb"
-        pkg_path.write_bytes(b"dummy")
-
-        args = Namespace(
-            package=pkg_path, extract=True, update=False,
-            output=tmp_path / "out.deb"
-        )
-        result = cli_sign(args)
-
-        assert result == 1
-
-    def test_sign_update_default_output(self, tmp_path):
-        """Test sign update with default output path."""
-        builder = DebBuilder()
-        control = Deb822({
-            "Package": "test",
-            "Version": "1.0",
-            "Architecture": "all",
-            "Maintainer": "Test <test@test.com>",
-            "Description": "Test",
-        })
-        builder.add_control_entry("control", control.dump())
-        builder.add_data_entry(b"content", "/usr/bin/test")
-
-        pkg_path = tmp_path / "test.deb"
-        pkg_path.write_bytes(builder.pack())
-
-        signature = b"-----BEGIN PGP SIGNATURE-----\ntest\n-----END PGP SIGNATURE-----"
-
-        args = Namespace(package=pkg_path, extract=False, update=True, output=None)
-
-        with patch("sys.stdin.buffer.read", return_value=signature):
-            result = cli_sign(args)
-
-        assert result == 0
-        assert (tmp_path / "test.signed.deb").exists()
-
-    def test_sign_update_custom_output(self, tmp_path):
-        """Test sign update with custom output path (covers branch 87->89)."""
-        builder = DebBuilder()
-        control = Deb822({
-            "Package": "test",
-            "Version": "1.0",
-            "Architecture": "all",
-            "Maintainer": "Test <test@test.com>",
-            "Description": "Test",
-        })
-        builder.add_control_entry("control", control.dump())
-        builder.add_data_entry(b"content", "/usr/bin/test")
-
-        pkg_path = tmp_path / "test.deb"
-        pkg_path.write_bytes(builder.pack())
-
-        signature = b"-----BEGIN PGP SIGNATURE-----\ntest\n-----END PGP SIGNATURE-----"
-
-        custom_output = tmp_path / "custom_output.deb"
-        args = Namespace(package=pkg_path, extract=False, update=True, output=custom_output)
-
-        with patch("sys.stdin.buffer.read", return_value=signature):
-            result = cli_sign(args)
-
-        assert result == 0
-        assert custom_output.exists()
-
-    def test_sign_no_action_error(self, tmp_path):
-        """Test sign with no action specified."""
-        pkg_path = tmp_path / "test.deb"
-        pkg_path.write_bytes(b"dummy")
-
-        args = Namespace(package=pkg_path, extract=False, update=False, output=None)
-        result = cli_sign(args)
-
-        assert result == 1
-
-
-class TestCliUnpack:
-    """Tests for CLI unpack command."""
-
-    def test_unpack_default_directory(self, tmp_path):
-        """Test unpack with default directory name."""
-        builder = DebBuilder()
-        control = Deb822({
-            "Package": "test",
-            "Version": "1.0",
-            "Architecture": "all",
-            "Maintainer": "Test <test@test.com>",
-            "Description": "Test",
-        })
-        builder.add_control_entry("control", control.dump())
-        builder.add_data_entry(b"content", "/usr/bin/test")
-
-        pkg_path = tmp_path / "mypackage.deb"
-        pkg_path.write_bytes(builder.pack())
-
-        # Change to tmp_path so the default directory is created there
-        old_cwd = os.getcwd()
-        os.chdir(tmp_path)
-        try:
-            args = Namespace(package=str(pkg_path), directory=None, keep_archives=False)
-            result = cli_unpack(args)
-        finally:
-            os.chdir(old_cwd)
-
-        assert result == 0
-        assert (tmp_path / "mypackage").exists()
-
-    def test_unpack_keep_archives(self, tmp_path):
-        """Test unpack with --keep-archives flag."""
-        builder = DebBuilder()
-        control = Deb822({
-            "Package": "test",
-            "Version": "1.0",
-            "Architecture": "all",
-            "Maintainer": "Test <test@test.com>",
-            "Description": "Test",
-        })
-        builder.add_control_entry("control", control.dump())
-        builder.add_data_entry(b"content", "/usr/bin/test")
-
-        pkg_path = tmp_path / "test.deb"
-        pkg_path.write_bytes(builder.pack())
-
-        output_dir = tmp_path / "output"
-        args = Namespace(package=str(pkg_path), directory=str(output_dir), keep_archives=True)
-        result = cli_unpack(args)
-
-        assert result == 0
-        assert (output_dir / "control.tar.gz").exists()
-        assert (output_dir / "data.tar.bz2").exists()
-
-
-class TestCliPack:
-    """Tests for CLI pack command."""
-
-    def test_parse_file_no_colon(self):
-        """Test parse_file with missing colon."""
-        from argparse import ArgumentTypeError
-        with pytest.raises(ArgumentTypeError, match="Invalid file format"):
-            parse_file("nocolon")
-
-    def test_parse_file_symlink(self, tmp_path):
-        """Test parse_file with symlink."""
-        # Create a symlink
-        target = tmp_path / "target"
-        target.write_bytes(b"content")
-        link = tmp_path / "link"
-        link.symlink_to(target)
-
-        result = list(parse_file(f"{link}:/usr/bin/link"))
-        assert len(result) == 1
-        assert result[0]["name"] == "/usr/bin/link"
-
-
 class TestFormatLsIntegration:
     """Integration tests for format_ls with TarInfoType."""
 
@@ -1036,108 +706,6 @@ class TestInspectXzFormat:
         assert "data.tar.xz" in output
 
 
-class TestMainEntryPoint:
-    """Tests for __main__.py entry point."""
-
-    def test_main_no_args(self):
-        """Test main with no arguments shows help."""
-        from debx.__main__ import main, PARSER
-
-        with patch.object(sys, 'argv', ['debx']):
-            with patch.object(PARSER, 'print_help') as mock_help:
-                with pytest.raises(SystemExit) as exc_info:
-                    main()
-                assert exc_info.value.code == 1
-                mock_help.assert_called_once()
-
-    def test_main_inspect_command(self, tmp_path):
-        """Test main with inspect command."""
-        from debx.__main__ import main
-
-        # Create a test package
-        builder = DebBuilder()
-        control = Deb822({
-            "Package": "test",
-            "Version": "1.0",
-            "Architecture": "all",
-            "Maintainer": "Test <test@test.com>",
-            "Description": "Test",
-        })
-        builder.add_control_entry("control", control.dump())
-        builder.add_data_entry(b"content", "/usr/bin/test")
-
-        pkg_path = tmp_path / "test.deb"
-        pkg_path.write_bytes(builder.pack())
-
-        with patch.object(sys, 'argv', ['debx', 'inspect', str(pkg_path)]):
-            with patch("sys.stdout", new_callable=io.StringIO):
-                with patch("sys.stdout.isatty", return_value=True):
-                    with pytest.raises(SystemExit) as exc_info:
-                        main()
-                    assert exc_info.value.code == 0
-
-    def test_main_pack_command(self, tmp_path):
-        """Test main with pack command."""
-        from debx.__main__ import main
-
-        # Create control file
-        control_file = tmp_path / "control"
-        control_file.write_text("""Package: test
-Version: 1.0
-Architecture: all
-Maintainer: Test <test@test.com>
-Description: Test
-""")
-
-        # Create data file
-        data_file = tmp_path / "binary"
-        data_file.write_bytes(b"#!/bin/sh\necho hello")
-
-        output_path = tmp_path / "output.deb"
-
-        with patch.object(sys, 'argv', [
-            'debx', 'pack',
-            '-c', f'{control_file}:/control',
-            '-d', f'{data_file}:/usr/bin/test:mode=0755',
-            '-o', str(output_path)
-        ]):
-            with pytest.raises(SystemExit) as exc_info:
-                main()
-            assert exc_info.value.code == 0
-
-        assert output_path.exists()
-
-    def test_main_unpack_command(self, tmp_path):
-        """Test main with unpack command."""
-        from debx.__main__ import main
-
-        # Create a test package
-        builder = DebBuilder()
-        control = Deb822({
-            "Package": "test",
-            "Version": "1.0",
-            "Architecture": "all",
-            "Maintainer": "Test <test@test.com>",
-            "Description": "Test",
-        })
-        builder.add_control_entry("control", control.dump())
-        builder.add_data_entry(b"content", "/usr/bin/test")
-
-        pkg_path = tmp_path / "test.deb"
-        pkg_path.write_bytes(builder.pack())
-
-        output_dir = tmp_path / "output"
-
-        with patch.object(sys, 'argv', [
-            'debx', 'unpack', str(pkg_path), '-d', str(output_dir)
-        ]):
-            with pytest.raises(SystemExit) as exc_info:
-                main()
-            assert exc_info.value.code == 0
-
-        assert output_dir.exists()
-
-
 class TestInspectNoMd5sums:
     """Test inspect when md5sums file doesn't exist."""
 
@@ -1211,68 +779,6 @@ class TestInspectNoControlTar:
         assert result == 0
         output = mock_stdout.getvalue()
         assert "data.tar.bz2" in output
-
-
-class TestSignExtractSuccess:
-    """Test successful sign extract operation."""
-
-    def test_sign_extract_success(self, tmp_path):
-        """Test sign extract with valid package."""
-        builder = DebBuilder()
-        control = Deb822({
-            "Package": "test",
-            "Version": "1.0",
-            "Architecture": "all",
-            "Maintainer": "Test <test@test.com>",
-            "Description": "Test",
-        })
-        builder.add_control_entry("control", control.dump())
-        builder.add_data_entry(b"content", "/usr/bin/test")
-
-        pkg_path = tmp_path / "test.deb"
-        pkg_path.write_bytes(builder.pack())
-
-        args = Namespace(package=pkg_path)
-
-        # Create a mock stdout with buffer attribute
-        mock_stdout = MagicMock()
-        mock_stdout.isatty.return_value = False
-        mock_stdout.buffer = io.BytesIO()
-
-        with patch("sys.stdout", mock_stdout):
-            result = cli_sign_extract_payload(args)
-
-        assert result == 0
-        assert len(mock_stdout.buffer.getvalue()) > 0
-
-    def test_sign_extract_via_cli_sign(self, tmp_path):
-        """Test sign extract success through cli_sign function (covers line 85)."""
-        builder = DebBuilder()
-        control = Deb822({
-            "Package": "test",
-            "Version": "1.0",
-            "Architecture": "all",
-            "Maintainer": "Test <test@test.com>",
-            "Description": "Test",
-        })
-        builder.add_control_entry("control", control.dump())
-        builder.add_data_entry(b"content", "/usr/bin/test")
-
-        pkg_path = tmp_path / "test.deb"
-        pkg_path.write_bytes(builder.pack())
-
-        args = Namespace(package=pkg_path, extract=True, update=False, output=None)
-
-        # Create a mock stdout with buffer attribute
-        mock_stdout = MagicMock()
-        mock_stdout.isatty.return_value = False
-        mock_stdout.buffer = io.BytesIO()
-
-        with patch("sys.stdout", mock_stdout):
-            result = cli_sign(args)
-
-        assert result == 0
-        assert len(mock_stdout.buffer.getvalue()) > 0
 
 
 class TestInspectPlainTar:

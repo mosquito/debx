@@ -117,11 +117,11 @@ class DebBuilder:
         with io.BytesIO() as fp:
             with tarfile.open(fileobj=fp, mode="w:bz2", format=tarfile.GNU_FORMAT, compresslevel=9) as tar:
                 for directory_info in self.get_directories():
-                    logging.debug(f"Adding directory to data archive: %s", directory_info.path)
+                    logging.debug("Adding directory to data archive: %s", directory_info.path)
                     tar.addfile(directory_info)
 
                 for item in sorted(self.data_files.values(), key=lambda x: x.tar_info.name):
-                    logging.debug(f"Adding data to archive: %s", item.tar_info.name)
+                    logging.debug("Adding data to archive: %s", item.tar_info.name)
                     if item.tar_info.type == tarfile.SYMTYPE:
                         tar.addfile(item.tar_info)
                     else:

@@ -134,3 +134,19 @@ class TestEmptyArArchive:
         ar_content = b"!<arch>\n"
         files = list(unpack_ar_archive(io.BytesIO(ar_content)))
         assert files == []
+
+
+class TestInvalidArArchive:
+    """Tests for invalid AR archive handling."""
+
+    def test_invalid_ar_magic(self):
+        """Test unpack_ar_archive with invalid magic bytes."""
+        invalid_ar = b"INVALID!\nsome data"
+        with pytest.raises(ValueError, match="Invalid ar archive"):
+            list(unpack_ar_archive(io.BytesIO(invalid_ar)))
+
+    def test_truncated_ar_magic(self):
+        """Test unpack_ar_archive with truncated magic bytes."""
+        truncated_ar = b"!<arch"  # Missing last bytes
+        with pytest.raises(ValueError, match="Invalid ar archive"):
+            list(unpack_ar_archive(io.BytesIO(truncated_ar)))

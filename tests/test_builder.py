@@ -132,3 +132,43 @@ class TestBuilderEdgeCases:
         dirs = list(builder.get_directories())
         for d in dirs:
             assert d.name != "/"
+
+
+class TestRootDirectorySkip:
+    """Tests for root directory handling in DebBuilder."""
+
+    def test_add_file_at_root_creates_no_root_dir(self):
+        """Test that adding a file at root doesn't create '/' directory."""
+        builder = DebBuilder()
+        # Add a file that would normally create "/" as parent
+        builder.add_data_entry(b"content", "/rootfile.txt")
+
+        # Get directories - should not include root
+        dirs = list(builder.get_directories())
+        dir_names = [str(d.name) for d in dirs]
+
+        # "/" or empty string should not be in the directory list
+        assert "/" not in dir_names
+        assert "" not in dir_names
+        assert "." not in dir_names
+
+    def test_root_directory_skip_in_get_directories(self):
+        """Test that get_directories skips root '/' directory."""
+        builder = DebBuilder()
+        builder.add_data_entry(b"content", "/usr/bin/test")
+
+        # Manually add "/" to directories to test the skip logic
+        builder.directories.add(Path("/"))
+
+        # Get directories - should skip "/"
+        dirs = list(builder.get_directories())
+
+        # "/" should be skipped
+        for d in dirs:
+            assert d.name != "/"
+            assert d.name != ""
+
+        # But other directories should be present
+        dir_paths = [d.name for d in dirs]
+        assert "usr" in dir_paths
+        assert "usr/bin" in dir_paths

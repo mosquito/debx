@@ -125,3 +125,21 @@ def test_mapping_update():
     assert deb["Package"] == "pkg"
     deb.update([("Arch", "amd64"), ("Priority", "optional")])
     assert set(deb.keys()) == {"Package", "Version", "Arch", "Priority"}
+
+
+class TestDeb822ContinuationWithoutField:
+    """Tests for Deb822 parsing edge cases."""
+
+    def test_continuation_line_without_prior_field(self):
+        """Test parsing continuation line without prior field definition."""
+        # A line starting with space but no prior field defined
+        text = " continuation without field\nPackage: test\n"
+        result = Deb822.parse(text)
+        # Should just skip the orphan continuation line
+        assert result["Package"] == "test"
+
+    def test_continuation_after_comment(self):
+        """Test continuation line after a comment."""
+        text = "# comment\n continuation\nPackage: test\n"
+        result = Deb822.parse(text)
+        assert result["Package"] == "test"
