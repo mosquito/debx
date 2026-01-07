@@ -19,46 +19,37 @@ from .types import TAR_EXTENSIONS, InspectItem, TarInfoType
 log = logging.getLogger(__name__)
 
 
-def format_ls(items: list[InspectItem]) -> str:
-    if not sys.stdout.isatty():
-        sys.stderr.write(
-            "Hint: probably you trying process this output. Please see the output formats for better results.\n",
-        )
-    def format_size(size: int) -> str:
-        if size == 0:
-            return "0B"
-        size_names = ("B", "K", "M", "G", "T", "P", "E", "Z", "Y")
-        i = int(math.floor(math.log(size, 1024)))
-        p = math.pow(1024, i)
-        s = round(size / p, 1)
-        if s.is_integer():
-            s = int(s)
-        return f"{s}{size_names[i]}"
+def _format_size(size: int) -> str:
+    """Format size in human-readable format."""
+    if size == 0:
+        return "0B"
+    size_names = ("B", "K", "M", "G", "T", "P", "E", "Z", "Y")
+    i = int(math.floor(math.log(size, 1024)))
+    p = math.pow(1024, i)
+    s = round(size / p, 1)
+    if s.is_integer():
+        s = int(s)
+    return f"{s}{size_names[i]}"
 
-    def format_mode(mode: Optional[int], item_type: Optional[str] = None) -> str:
-        if mode is None:
-            return "----------"
 
-        result = ""
+def _format_mode(mode: Optional[int], item_type: Optional[str] = None) -> str:
+    """Format file mode as ls-style permission string."""
+    if mode is None:
+        return "----------"
 
-        if item_type is not None:
-            if item_type == "directory" or (isinstance(item_type, TarInfoType) and item_type == TarInfoType.directory):
-                result += "d"
-            elif item_type == "symlink" or (isinstance(item_type, TarInfoType) and item_type == TarInfoType.symlink):
-                result += "l"
-            elif item_type == "char" or (isinstance(item_type, TarInfoType) and item_type == TarInfoType.char):
-                result += "c"
-            elif item_type == "block" or (isinstance(item_type, TarInfoType) and item_type == TarInfoType.block):
-                result += "b"
-            elif item_type == "fifo" or (isinstance(item_type, TarInfoType) and item_type == TarInfoType.fifo):
-                result += "p"
-            else:
-                if stat.S_ISDIR(mode):
-                    result += "d"
-                elif stat.S_ISLNK(mode):
-                    result += "l"
-                else:
-                    result += "-"
+    result = ""
+
+    if item_type is not None:
+        if item_type == "directory" or (isinstance(item_type, TarInfoType) and item_type == TarInfoType.directory):
+            result += "d"
+        elif item_type == "symlink" or (isinstance(item_type, TarInfoType) and item_type == TarInfoType.symlink):
+            result += "l"
+        elif item_type == "char" or (isinstance(item_type, TarInfoType) and item_type == TarInfoType.char):
+            result += "c"
+        elif item_type == "block" or (isinstance(item_type, TarInfoType) and item_type == TarInfoType.block):
+            result += "b"
+        elif item_type == "fifo" or (isinstance(item_type, TarInfoType) and item_type == TarInfoType.fifo):
+            result += "p"
         else:
             if stat.S_ISDIR(mode):
                 result += "d"
@@ -66,43 +57,59 @@ def format_ls(items: list[InspectItem]) -> str:
                 result += "l"
             else:
                 result += "-"
-        result += "r" if mode & stat.S_IRUSR else "-"
-        result += "w" if mode & stat.S_IWUSR else "-"
-        result += "x" if mode & stat.S_IXUSR else "-"
-        result += "r" if mode & stat.S_IRGRP else "-"
-        result += "w" if mode & stat.S_IWGRP else "-"
-        result += "x" if mode & stat.S_IXGRP else "-"
-        result += "r" if mode & stat.S_IROTH else "-"
-        result += "w" if mode & stat.S_IWOTH else "-"
-        result += "x" if mode & stat.S_IXOTH else "-"
-        return result
-
-    def format_time(mtime: Optional[int], user_locale: Optional[str] = None) -> str:
-        if mtime is None:
-            return "         "
-
-        old_locale = locale.getlocale(locale.LC_TIME)
-        if user_locale:
-            try:
-                locale.setlocale(locale.LC_TIME, user_locale)
-            except locale.Error:
-                pass
-
-        dt = datetime.datetime.fromtimestamp(mtime)
-        now = datetime.datetime.now()
-
-        if dt.year == now.year:
-            result = dt.strftime("%d %b %H:%M")
+    else:
+        if stat.S_ISDIR(mode):
+            result += "d"
+        elif stat.S_ISLNK(mode):
+            result += "l"
         else:
-            result = dt.strftime("%d %b  %Y")
+            result += "-"
+    result += "r" if mode & stat.S_IRUSR else "-"
+    result += "w" if mode & stat.S_IWUSR else "-"
+    result += "x" if mode & stat.S_IXUSR else "-"
+    result += "r" if mode & stat.S_IRGRP else "-"
+    result += "w" if mode & stat.S_IWGRP else "-"
+    result += "x" if mode & stat.S_IXGRP else "-"
+    result += "r" if mode & stat.S_IROTH else "-"
+    result += "w" if mode & stat.S_IWOTH else "-"
+    result += "x" if mode & stat.S_IXOTH else "-"
+    return result
 
-        if user_locale:
-            try:
-                locale.setlocale(locale.LC_TIME, old_locale)
-            except locale.Error:
-                locale.setlocale(locale.LC_TIME, 'C')
 
-        return result
+def _format_time(mtime: Optional[int], user_locale: Optional[str] = None) -> str:
+    """Format modification time in ls-style format."""
+    if mtime is None:
+        return "         "
+
+    old_locale = locale.getlocale(locale.LC_TIME)
+    if user_locale:
+        try:
+            locale.setlocale(locale.LC_TIME, user_locale)
+        except locale.Error:
+            pass
+
+    dt = datetime.datetime.fromtimestamp(mtime)
+    now = datetime.datetime.now()
+
+    if dt.year == now.year:
+        result = dt.strftime("%d %b %H:%M")
+    else:
+        result = dt.strftime("%d %b  %Y")
+
+    if user_locale:
+        try:
+            locale.setlocale(locale.LC_TIME, old_locale)
+        except locale.Error:
+            locale.setlocale(locale.LC_TIME, 'C')
+
+    return result
+
+
+def format_ls(items: list[InspectItem]) -> str:
+    if not sys.stdout.isatty():
+        sys.stderr.write(
+            "Hint: probably you trying process this output. Please see the output formats for better results.\n",
+        )
 
     if not items:
         return "total 0"
@@ -120,11 +127,11 @@ def format_ls(items: list[InspectItem]) -> str:
             file_name = item["file"] + "/" + item.get("path", "")
         else:
             file_name = item["file"]
-        file_size = format_size(item.get("size", 0))
-        file_mode = format_mode(item.get("mode", None), item.get("type", None))
+        file_size = _format_size(item.get("size", 0))
+        file_mode = _format_mode(item.get("mode", None), item.get("type", None))
         file_uid = str(item.get("uid", 0)).rjust(max_uid_len)
         file_gid = str(item.get("gid", 0)).rjust(max_gid_len)
-        file_time = format_time(item.get("mtime", None))
+        file_time = _format_time(item.get("mtime", None))
 
         path_info = ""
         if item.get("path") and item.get("type") == "archive":

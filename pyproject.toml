@@ -1,7 +1,7 @@
 [project]
 name = "debx"
-version = "0.2.11"
-description = "Minimal Python library to programmatically construct Debian .deb packages"
+version = "0.2.12"
+description = "Minimal Python library to programmatically construct and inspect Debian .deb packages"
 readme = "README.md"
 authors = [
   { name = "Dmitry Orlov", email = "me@mosquito.su" }
@@ -9,16 +9,51 @@ authors = [
 license = "MIT"
 license-files = ["COPYING"]
 requires-python = ">=3.10"
+keywords = [
+    "administrator",
+    "apt",
+    "ar",
+    "archive",
+    "automation",
+    "build",
+    "cross-platform",
+    "deb",
+    "debian",
+    "development",
+    "devops",
+    "dpkg",
+    "infrastructure",
+    "library",
+    "linux",
+    "macos",
+    "package",
+    "packaging",
+    "system",
+    "tool",
+    "windows",
+]
+
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
     "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Build Tools",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Archiving :: Packaging",
+    "Topic :: System :: Installation/Setup",
+    "Topic :: System :: Software Distribution",
     "Typing :: Typed",
 ]
 
@@ -34,6 +69,7 @@ dev = [
     "markdown-pytest>=0.3.2",
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
+    "ruff>=0.14.10",
 ]
 
 [project.urls]
@@ -44,3 +80,12 @@ dev = [
 
 [project.scripts]
 "debx" = "debx.__main__:main"
+
+[tool.coverage.run]
+branch = true
+source = ["debx"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "if __name__ == .__main__.:",
+]

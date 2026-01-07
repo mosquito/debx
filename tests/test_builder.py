@@ -5,8 +5,7 @@ import tarfile
 import pytest
 from pathlib import PurePosixPath, Path
 
-from debx import unpack_ar_archive, DebBuilder
-
+from debx import unpack_ar_archive, DebBuilder, Deb822, DebReader
 
 
 @pytest.fixture
@@ -89,3 +88,91 @@ def test_md5sum_calculation(builder):
     assert len(builder.md5sums) == 1
     md5 = builder.md5sums[PurePosixPath("/test/file")]
     assert md5 == hashlib.md5(test_data).hexdigest()
+
+
+class TestBuilderEdgeCases:
+    """Tests for DebBuilder edge cases."""
+
+    def test_add_control_entry_absolute_path(self):
+        """Test add_control_entry with absolute path."""
+        builder = DebBuilder()
+        builder.add_control_entry("/control", "Package: test")
+        # The path should be normalized
+        assert "control" in builder.control_files
+
+    def test_symlink_in_data_tar(self):
+        """Test that symlinks are properly included in data.tar."""
+        builder = DebBuilder()
+        builder.add_data_entry(b"content", "/usr/bin/target", mode=0o755)
+        builder.add_data_entry(b"", "/usr/bin/link", symlink_to="/usr/bin/target")
+
+        control = Deb822({
+            "Package": "test",
+            "Version": "1.0",
+            "Architecture": "all",
+            "Maintainer": "Test <test@test.com>",
+            "Description": "Test",
+        })
+        builder.add_control_entry("control", control.dump())
+
+        deb_content = builder.pack()
+
+        # Verify package can be read
+        reader = DebReader(io.BytesIO(deb_content))
+        names = reader.data.getnames()
+        assert "usr/bin/target" in names
+        assert "usr/bin/link" in names
+
+    def test_directory_at_root(self):
+        """Test that root directory is skipped."""
+        builder = DebBuilder()
+        builder.add_data_entry(b"content", "/file.txt")
+
+        # get_directories should not include root
+        dirs = list(builder.get_directories())
+        for d in dirs:
+            assert d.name != "/"
+
+
+class TestRootDirectorySkip:
+    """Tests for root directory handling in DebBuilder."""
+
+    def test_add_file_at_root_creates_no_root_dir(self):
+        """Test that adding a file at root doesn't create '/' directory."""
+        builder = DebBuilder()
+        # Add a file that would normally create "/" as parent
+        builder.add_data_entry(b"content", "/rootfile.txt")
+
+        # Get directories - should not include root
+        dirs = list(builder.get_directories())
+        dir_names = [str(d.name) for d in dirs]
+
+        # "/" or empty string should not be in the directory list
+        assert "/" not in dir_names
+        assert "" not in dir_names
+        assert "." not in dir_names
+
+    def test_root_directory_skip_in_get_directories(self):
+        """Test that get_directories skips root '/' directory."""
+        builder = DebBuilder()
+        builder.add_data_entry(b"content", "/usr/bin/test")
+
+        # Get one of the existing directories to determine the path type used
+        existing_dir = next(iter(builder.directories))
+        # Create root path using the same path type for sorting compatibility
+        root_path = type(existing_dir)("/")
+        builder.directories.add(root_path)
+
+        # Get directories - should skip "/"
+        dirs = list(builder.get_directories())
+
+        # "/" should be skipped
+        for d in dirs:
+            assert d.name != "/"
+            assert d.name != ""
+
+        # But other directories should be present
+        # Normalize backslashes to forward slashes for cross-platform compatibility
+        dir_parts = [PurePosixPath(d.name.replace("\\", "/")).parts for d in dirs]
+        assert ("usr",) in dir_parts
+        assert ("usr", "bin") in dir_parts
