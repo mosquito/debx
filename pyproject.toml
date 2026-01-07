@@ -1,6 +1,6 @@
 [project]
 name = "debx"
-version = "0.2.10"
+version = "0.2.11"
 description = "Minimal Python library to programmatically construct Debian .deb packages"
 readme = "README.md"
 authors = [
