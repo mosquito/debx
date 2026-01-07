@@ -28,6 +28,11 @@ dependencies = []
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]
+
 [project.urls]
 "Homepage" = "https://github.com/mosquito/debx"
 "Repository" = "https://github.com/mosquito/debx"
