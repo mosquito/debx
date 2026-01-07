@@ -157,8 +157,11 @@ class TestRootDirectorySkip:
         builder = DebBuilder()
         builder.add_data_entry(b"content", "/usr/bin/test")
 
-        # Manually add "/" to directories to test the skip logic
-        builder.directories.add(Path("/"))
+        # Get one of the existing directories to determine the path type used
+        existing_dir = next(iter(builder.directories))
+        # Create root path using the same path type for sorting compatibility
+        root_path = type(existing_dir)("/")
+        builder.directories.add(root_path)
 
         # Get directories - should skip "/"
         dirs = list(builder.get_directories())
@@ -169,6 +172,7 @@ class TestRootDirectorySkip:
             assert d.name != ""
 
         # But other directories should be present
-        dir_paths = [d.name for d in dirs]
-        assert "usr" in dir_paths
-        assert "usr/bin" in dir_paths
+        # Normalize backslashes to forward slashes for cross-platform compatibility
+        dir_parts = [PurePosixPath(d.name.replace("\\", "/")).parts for d in dirs]
+        assert ("usr",) in dir_parts
+        assert ("usr", "bin") in dir_parts
