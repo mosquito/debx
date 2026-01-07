@@ -72,7 +72,10 @@ debx pack \
 
 ### 30-Second Python Example
 
+<!-- name: test_quick_start -->
 ```python
+import os
+import tempfile
 from debx import DebBuilder, Deb822
 
 # Create a new package
@@ -96,8 +99,11 @@ builder.add_data_entry(
 )
 
 # Write the package
-with open("hello-world_1.0.0_all.deb", "wb") as f:
-    f.write(builder.pack())
+with tempfile.TemporaryDirectory() as tmp:
+    path = os.path.join(tmp, "hello-world_1.0.0_all.deb")
+    with open(path, "wb") as f:
+        f.write(builder.pack())
+    assert os.path.exists(path)
 ```
 
 ---
@@ -392,7 +398,10 @@ debx sign --extract pkg.deb | gpg --armor --detach-sign | \
 
 ### Basic Usage
 
+<!-- name: test_debbuilder_basic -->
 ```python
+import os
+import tempfile
 from debx import DebBuilder, Deb822
 
 builder = DebBuilder()
@@ -414,24 +423,45 @@ builder.add_data_entry(b"file content", "/path/in/package")
 deb_content = builder.pack()
 
 # Write to file
-with open("mypackage.deb", "wb") as f:
-    f.write(deb_content)
+with tempfile.TemporaryDirectory() as tmp:
+    path = os.path.join(tmp, "mypackage.deb")
+    with open(path, "wb") as f:
+        f.write(deb_content)
+    assert os.path.exists(path)
+    assert os.path.getsize(path) > 0
 ```
 
 ### Adding Control Entries
 
+<!-- name: test_add_control_entry -->
 ```python
+from debx import DebBuilder
+
+builder = DebBuilder()
 builder.add_control_entry(
     name="control",           # Filename in control.tar.gz
-    content="Package: ...",   # String or bytes content
+    content="Package: test\nVersion: 1.0\nArchitecture: all\nMaintainer: Test <test@test.com>\nDescription: Test",
     mode=0o644,               # File permissions (default: 0o644)
     mtime=-1,                 # Modification time (-1 = current time)
 )
+assert "control" in builder.control_files
 ```
 
 Common control entries:
 
+<!-- name: test_common_control_entries -->
 ```python
+from debx import DebBuilder, Deb822
+
+builder = DebBuilder()
+control = Deb822({
+    "Package": "test",
+    "Version": "1.0",
+    "Architecture": "all",
+    "Maintainer": "Test <test@test.com>",
+    "Description": "Test package",
+})
+
 # Main control file
 builder.add_control_entry("control", control.dump())
 
@@ -445,11 +475,17 @@ builder.add_control_entry("postrm", "#!/bin/sh\necho 'Post-remove'", mode=0o755)
 
 # Configuration files list
 builder.add_control_entry("conffiles", "/etc/myapp/config\n")
+
+assert len(builder.control_files) == 6
 ```
 
 ### Adding Data Entries
 
+<!-- name: test_add_data_entry -->
 ```python
+from debx import DebBuilder
+
+builder = DebBuilder()
 builder.add_data_entry(
     content=b"binary content",       # File content as bytes
     name="/usr/bin/myapp",           # Absolute path in package
@@ -459,11 +495,17 @@ builder.add_data_entry(
     mtime=-1,                        # Modification time (-1 = current time)
     symlink_to=None,                 # Target path for symlinks
 )
+assert "usr/bin/myapp" in builder.data_files
 ```
 
 ### Creating Symlinks
 
+<!-- name: test_create_symlinks -->
 ```python
+from debx import DebBuilder
+
+builder = DebBuilder()
+
 # Create the target file
 builder.add_data_entry(
     b"#!/bin/sh\necho 'Hello'\n",
@@ -477,41 +519,77 @@ builder.add_data_entry(
     "/usr/bin/myapp-link",
     symlink_to="/usr/bin/myapp"
 )
+
+assert "usr/bin/myapp" in builder.data_files
+assert "usr/bin/myapp-link" in builder.data_files
 ```
 
 ### Reading Files from Disk
 
+<!-- name: test_read_files_from_disk -->
 ```python
+import os
+import tempfile
 from pathlib import Path
+from debx import DebBuilder
 
-# Read a file and add it to the package
-binary = Path("./build/myapp").read_bytes()
-builder.add_data_entry(binary, "/usr/bin/myapp", mode=0o755)
+builder = DebBuilder()
 
-# Add configuration file
-config = Path("./config/myapp.conf").read_bytes()
-builder.add_data_entry(config, "/etc/myapp/myapp.conf", mode=0o644)
+with tempfile.TemporaryDirectory() as tmp:
+    # Create test files
+    build_dir = Path(tmp) / "build"
+    build_dir.mkdir()
+    myapp = build_dir / "myapp"
+    myapp.write_bytes(b"#!/bin/sh\necho hello")
+
+    config_dir = Path(tmp) / "config"
+    config_dir.mkdir()
+    config_file = config_dir / "myapp.conf"
+    config_file.write_bytes(b"key=value")
+
+    # Read a file and add it to the package
+    binary = myapp.read_bytes()
+    builder.add_data_entry(binary, "/usr/bin/myapp", mode=0o755)
+
+    # Add configuration file
+    config = config_file.read_bytes()
+    builder.add_data_entry(config, "/etc/myapp/myapp.conf", mode=0o644)
+
+    assert "usr/bin/myapp" in builder.data_files
+    assert "etc/myapp/myapp.conf" in builder.data_files
 ```
 
 ### Directory Handling
 
 Directories are created automatically based on file paths:
 
+<!-- name: test_directory_handling -->
 ```python
+from debx import DebBuilder
+
+builder = DebBuilder()
+
 # This automatically creates /usr, /usr/share, and /usr/share/myapp directories
 builder.add_data_entry(b"content", "/usr/share/myapp/data.txt")
+
+assert len(builder.directories) == 3
 ```
 
 ### MD5 Checksums
 
 MD5 checksums are automatically calculated and included in `control.tar.gz/md5sums`:
 
+<!-- name: test_md5_checksums -->
 ```python
+from pathlib import PurePosixPath
+from debx import DebBuilder
+
+builder = DebBuilder()
 builder.add_data_entry(b"content", "/usr/bin/myapp")
 
 # Access checksums before packing
-print(builder.md5sums)
-# {PurePosixPath('/usr/bin/myapp'): 'd41d8cd98f00b204e9800998ecf8427e'}
+assert PurePosixPath("/usr/bin/myapp") in builder.md5sums
+assert builder.md5sums[PurePosixPath("/usr/bin/myapp")] == "9a0364b9e99bb480dd25e1f0284c8555"
 ```
 
 ## Reading Packages with DebReader
@@ -520,65 +598,139 @@ print(builder.md5sums)
 
 ### Basic Usage
 
+<!-- name: test_debreader_basic -->
 ```python
-from debx import DebReader, Deb822
+import io
+from debx import DebBuilder, DebReader, Deb822
 
-with open("package.deb", "rb") as f:
-    reader = DebReader(f)
+# First create a package to read
+builder = DebBuilder()
+control = Deb822({
+    "Package": "test-pkg",
+    "Version": "1.0.0",
+    "Architecture": "all",
+    "Maintainer": "Test <test@example.com>",
+    "Description": "Test package",
+})
+builder.add_control_entry("control", control.dump())
+builder.add_data_entry(b"test content", "/usr/bin/myapp")
+builder.add_data_entry(b"config data", "/etc/myapp/config")
+deb_content = builder.pack()
 
-    # Access control archive (tarfile.TarFile)
-    print(reader.control.getnames())
-    # ['control', 'md5sums', 'postinst', ...]
+# Now read it
+reader = DebReader(io.BytesIO(deb_content))
 
-    # Access data archive (tarfile.TarFile)
-    print(reader.data.getnames())
-    # ['usr/bin/myapp', 'etc/myapp/config', ...]
+# Access control archive (tarfile.TarFile)
+control_names = reader.control.getnames()
+assert "control" in control_names
+assert "md5sums" in control_names
+
+# Access data archive (tarfile.TarFile)
+data_names = reader.data.getnames()
+assert "usr/bin/myapp" in data_names
+assert "etc/myapp/config" in data_names
 ```
 
 ### Reading the Control File
 
+<!-- name: test_read_control_file -->
 ```python
-with open("package.deb", "rb") as f:
-    reader = DebReader(f)
+import io
+from debx import DebBuilder, DebReader, Deb822
 
-    # Extract and parse control file
-    control_member = reader.control.extractfile("control")
-    control_content = control_member.read().decode("utf-8")
+# Create a test package
+builder = DebBuilder()
+control = Deb822({
+    "Package": "test-pkg",
+    "Version": "2.0.0",
+    "Architecture": "all",
+    "Maintainer": "Test <test@example.com>",
+    "Description": "A test package for reading",
+})
+builder.add_control_entry("control", control.dump())
+builder.add_data_entry(b"data", "/usr/bin/test")
+deb_content = builder.pack()
 
-    control = Deb822.parse(control_content)
+# Read and parse control file
+reader = DebReader(io.BytesIO(deb_content))
 
-    print(f"Package: {control['Package']}")
-    print(f"Version: {control['Version']}")
-    print(f"Description: {control['Description']}")
+control_member = reader.control.extractfile("control")
+control_content = control_member.read().decode("utf-8")
+
+parsed = Deb822.parse(control_content)
+
+assert parsed["Package"] == "test-pkg"
+assert parsed["Version"] == "2.0.0"
+assert "test package" in parsed["Description"]
 ```
 
 ### Extracting Data Files
 
+<!-- name: test_extract_data_files -->
 ```python
-with open("package.deb", "rb") as f:
-    reader = DebReader(f)
+import io
+import tempfile
+from debx import DebBuilder, DebReader, Deb822
 
-    # List all files
-    for member in reader.data.getmembers():
-        print(f"{member.name} ({member.size} bytes)")
+# Create a test package
+builder = DebBuilder()
+control = Deb822({
+    "Package": "test-pkg",
+    "Version": "1.0.0",
+    "Architecture": "all",
+    "Maintainer": "Test <test@example.com>",
+    "Description": "Test",
+})
+builder.add_control_entry("control", control.dump())
+builder.add_data_entry(b"binary content here", "/usr/bin/myapp")
+deb_content = builder.pack()
 
-    # Extract a specific file
-    content = reader.data.extractfile("usr/bin/myapp").read()
+reader = DebReader(io.BytesIO(deb_content))
 
-    # Extract to directory
-    reader.data.extractall("/tmp/extracted")
+# List all files
+files = []
+for member in reader.data.getmembers():
+    files.append((member.name, member.size))
+assert any("usr/bin/myapp" in f[0] for f in files)
+
+# Extract a specific file
+content = reader.data.extractfile("usr/bin/myapp").read()
+assert content == b"binary content here"
+
+# Extract to directory
+with tempfile.TemporaryDirectory() as tmp:
+    reader.data.extractall(tmp)
 ```
 
 ### Reading MD5 Checksums
 
+<!-- name: test_read_md5sums -->
 ```python
-with open("package.deb", "rb") as f:
-    reader = DebReader(f)
+import io
+from debx import DebBuilder, DebReader, Deb822
 
-    md5sums = reader.control.extractfile("md5sums")
-    for line in md5sums.read().decode().splitlines():
-        checksum, filepath = line.split(maxsplit=1)
-        print(f"{filepath}: {checksum}")
+# Create a test package
+builder = DebBuilder()
+control = Deb822({
+    "Package": "test-pkg",
+    "Version": "1.0.0",
+    "Architecture": "all",
+    "Maintainer": "Test <test@example.com>",
+    "Description": "Test",
+})
+builder.add_control_entry("control", control.dump())
+builder.add_data_entry(b"file content", "/usr/share/test/file.txt")
+deb_content = builder.pack()
+
+reader = DebReader(io.BytesIO(deb_content))
+
+md5sums = reader.control.extractfile("md5sums")
+checksums = {}
+for line in md5sums.read().decode().splitlines():
+    checksum, filepath = line.split(maxsplit=1)
+    checksums[filepath.strip()] = checksum.strip()
+
+assert "usr/share/test/file.txt" in checksums
 ```
 
 ## Working with Control Files (Deb822)
@@ -587,6 +739,7 @@ The `Deb822` class parses and generates Debian control file format (RFC 822 styl
 
 ### Parsing Control Files
 
+<!-- name: test_deb822_parse -->
 ```python
 from debx import Deb822
 
@@ -600,13 +753,15 @@ Description: Short description
  spans multiple lines.
 """)
 
-print(control["Package"])      # "example"
-print(control["Version"])      # "1.0.0"
-print(control["Description"])  # "Short description\nThis is a longer..."
+assert control["Package"] == "example"
+assert control["Version"] == "1.0.0"
+assert "Short description" in control["Description"]
+assert "longer description" in control["Description"]
 ```
 
 ### Creating Control Files
 
+<!-- name: test_deb822_create -->
 ```python
 from debx import Deb822
 
@@ -622,24 +777,24 @@ control = Deb822({
 
 # Generate control file content
 content = control.dump()
-print(content)
-```
-
-Output:
-```
-Package: mypackage
-Version: 1.0.0
-Architecture: amd64
-Maintainer: Name <email@example.com>
-Depends: libc6 (>= 2.17), libssl3
-Description: Short description
- Long description line 1
- Long description line 2
+assert "Package: mypackage" in content
+assert "Version: 1.0.0" in content
+assert "Architecture: amd64" in content
 ```
 
 ### Modifying Control Files
 
+<!-- name: test_deb822_modify -->
 ```python
+from debx import Deb822
+
+existing_content = """
+Package: mypackage
+Version: 1.0.0
+Depends: python3
+Suggests: vim
+"""
+
 control = Deb822.parse(existing_content)
 
 # Modify fields
@@ -652,40 +807,60 @@ control["Recommends"] = "nginx"
 del control["Suggests"]
 
 # Check field existence
-if "Depends" in control:
-    print(control["Depends"])
+assert "Depends" in control
+assert control["Depends"] == "python3"
 
 # Iterate over fields
-for key in control:
-    print(f"{key}: {control[key]}")
+keys = list(control)
+assert "Package" in keys
+assert "Version" in keys
 
 # Convert to dict
 data = control.to_dict()
+assert data["Version"] == "2.0.0"
+assert "Suggests" not in data
 ```
 
 ### Reading from File
 
+<!-- name: test_deb822_from_file -->
 ```python
+import tempfile
+from pathlib import Path
 from debx import Deb822
 
-control = Deb822.from_file("/path/to/control")
+with tempfile.TemporaryDirectory() as tmp:
+    control_path = Path(tmp) / "control"
+    control_path.write_text("""Package: test
+Version: 1.0
+Architecture: all
+Maintainer: Test <test@test.com>
+Description: Test package
+""")
+
+    control = Deb822.from_file(control_path)
+    assert control["Package"] == "test"
+    assert control["Version"] == "1.0"
 ```
 
 ### Multi-line Fields
 
 Multi-line values use continuation lines (starting with space):
 
+<!-- name: test_deb822_multiline -->
 ```python
+from debx import Deb822
+
 control = Deb822({
     "Description": "Short description\n"
                    "This is line 2 of the long description\n"
                    "This is line 3 of the long description",
 })
 
-print(control.dump())
-# Description: Short description
-#  This is line 2 of the long description
-#  This is line 3 of the long description
+dumped = control.dump()
+assert "Description: Short description" in dumped
+assert " This is line 2" in dumped
+assert " This is line 3" in dumped
 ```
 
 ## Low-Level AR Archive Operations
@@ -694,55 +869,93 @@ For advanced use cases, you can work directly with AR archives.
 
 ### Reading AR Archives
 
+<!-- name: test_read_ar_archives -->
 ```python
-from debx import unpack_ar_archive
+import io
+from debx import DebBuilder, Deb822, unpack_ar_archive
 
-with open("package.deb", "rb") as f:
-    for ar_file in unpack_ar_archive(f):
-        print(f"Name: {ar_file.name}")
-        print(f"Size: {ar_file.size}")
-        print(f"Mode: {oct(ar_file.mode)}")
-        print(f"UID/GID: {ar_file.uid}/{ar_file.gid}")
-        print(f"MTime: {ar_file.mtime}")
-        # Access content
-        content = ar_file.content
+# Create a package to read
+builder = DebBuilder()
+control = Deb822({
+    "Package": "test",
+    "Version": "1.0",
+    "Architecture": "all",
+    "Maintainer": "Test <test@test.com>",
+    "Description": "Test",
+})
+builder.add_control_entry("control", control.dump())
+builder.add_data_entry(b"data", "/usr/bin/test")
+deb_content = builder.pack()
+
+# Read the AR archive
+files = []
+for ar_file in unpack_ar_archive(io.BytesIO(deb_content)):
+    files.append({
+        "name": ar_file.name,
+        "size": ar_file.size,
+        "mode": oct(ar_file.mode),
+        "uid": ar_file.uid,
+        "gid": ar_file.gid,
+    })
+
+assert any(f["name"] == "debian-binary" for f in files)
+assert any(f["name"] == "control.tar.gz" for f in files)
+assert any(f["name"] == "data.tar.bz2" for f in files)
 ```
 
 ### Creating AR Archives
 
+<!-- name: test_create_ar_archives -->
 ```python
-from debx import ArFile, pack_ar_archive
+import io
+import tempfile
+from pathlib import Path
+from debx import ArFile, pack_ar_archive, unpack_ar_archive
 
 # Create from bytes
 file1 = ArFile.from_bytes(b"content", "filename.txt")
 
-# Create from file on disk
-file2 = ArFile.from_file("/path/to/file", arcname="renamed.txt")
+with tempfile.TemporaryDirectory() as tmp:
+    # Create a test file
+    test_file = Path(tmp) / "test.txt"
+    test_file.write_bytes(b"test file content")
 
-# Create from file object
-with open("data.bin", "rb") as f:
-    file3 = ArFile.from_fp(f, "data.bin")
+    # Create from file on disk
+    file2 = ArFile.from_file(test_file, arcname="renamed.txt")
 
-# Pack into AR archive
-archive_content = pack_ar_archive(file1, file2, file3)
+    # Create from file object
+    data_file = Path(tmp) / "data.bin"
+    data_file.write_bytes(b"binary data")
+    with open(data_file, "rb") as f:
+        file3 = ArFile.from_fp(f, "data.bin")
 
-with open("archive.ar", "wb") as f:
-    f.write(archive_content)
+    # Pack into AR archive
+    archive_content = pack_ar_archive(file1, file2, file3)
+
+    # Verify
+    unpacked = list(unpack_ar_archive(io.BytesIO(archive_content)))
+    assert len(unpacked) == 3
+    assert unpacked[0].name == "filename.txt"
+    assert unpacked[1].name == "renamed.txt"
+    assert unpacked[2].name == "data.bin"
 ```
 
 ### ArFile Properties
 
+<!-- name: test_arfile_properties -->
 ```python
+from debx import ArFile
+
 ar_file = ArFile.from_bytes(b"content", "test.txt")
 
-ar_file.name     # Filename (max 16 chars)
-ar_file.size     # Content size in bytes
-ar_file.content  # Raw bytes content
-ar_file.uid      # Owner user ID
-ar_file.gid      # Owner group ID
-ar_file.mode     # File mode (permissions)
-ar_file.mtime    # Modification time (Unix timestamp)
-ar_file.fp       # BytesIO file object for content
+assert ar_file.name == "test.txt"       # Filename (max 16 chars)
+assert ar_file.size == 7                # Content size in bytes
+assert ar_file.content == b"content"    # Raw bytes content
+assert ar_file.uid == 0                 # Owner user ID
+assert ar_file.gid == 0                 # Owner group ID
+assert ar_file.mode == 0o100644         # File mode (permissions)
+assert ar_file.mtime > 0                # Modification time (Unix timestamp)
+assert ar_file.fp.read() == b"content"  # BytesIO file object for content
 ```
 
 ---
@@ -753,7 +966,10 @@ ar_file.fp       # BytesIO file object for content
 
 Create a minimal "Hello World" package from scratch.
 
+<!-- name: test_tutorial_simple_package -->
 ```python
+import os
+import tempfile
 from debx import DebBuilder, Deb822
 
 # 1. Initialize builder
@@ -790,10 +1006,14 @@ Usage: hello-debx
 builder.add_data_entry(readme, "/usr/share/doc/hello-debx/README")
 
 # 5. Build and save
-with open("hello-debx_1.0.0_all.deb", "wb") as f:
-    f.write(builder.pack())
+with tempfile.TemporaryDirectory() as tmp:
+    path = os.path.join(tmp, "hello-debx_1.0.0_all.deb")
+    with open(path, "wb") as f:
+        f.write(builder.pack())
 
-print("Package created: hello-debx_1.0.0_all.deb")
+    assert os.path.exists(path)
+    assert os.path.getsize(path) > 0
+    print("Package created: hello-debx_1.0.0_all.deb")
 ```
 
 Install and test:
@@ -808,28 +1028,45 @@ hello-debx
 
 Read an existing package, modify it, and create a new version.
 
+<!-- name: test_tutorial_modify_package -->
 ```python
+import io
+import os
+import tempfile
 from debx import DebReader, DebBuilder, Deb822
 
+# First, create an "original" package to modify
+original_builder = DebBuilder()
+original_control = Deb822({
+    "Package": "test-package",
+    "Version": "1.0.0",
+    "Architecture": "all",
+    "Maintainer": "Test <test@example.com>",
+    "Description": "Original package",
+})
+original_builder.add_control_entry("control", original_control.dump())
+original_builder.add_data_entry(b"original binary", "/usr/bin/testapp", mode=0o755)
+original_builder.add_data_entry(b"config data", "/etc/testapp/config", mode=0o644)
+original_deb = original_builder.pack()
+
 # 1. Read the original package
-with open("original.deb", "rb") as f:
-    reader = DebReader(f)
+reader = DebReader(io.BytesIO(original_deb))
 
-    # Parse control file
-    control_content = reader.control.extractfile("control").read().decode()
-    control = Deb822.parse(control_content)
+# Parse control file
+control_content = reader.control.extractfile("control").read().decode()
+control = Deb822.parse(control_content)
 
-    # Store all data files
-    data_files = {}
-    for member in reader.data.getmembers():
-        if member.isfile():
-            content = reader.data.extractfile(member).read()
-            data_files[member.name] = {
-                "content": content,
-                "mode": member.mode,
-                "uid": member.uid,
-                "gid": member.gid,
-            }
+# Store all data files
+data_files = {}
+for member in reader.data.getmembers():
+    if member.isfile():
+        content = reader.data.extractfile(member).read()
+        data_files[member.name] = {
+            "content": content,
+            "mode": member.mode,
+            "uid": member.uid,
+            "gid": member.gid,
+        }
 
 # 2. Modify the package
 control["Version"] = "1.0.1"  # Bump version
@@ -852,8 +1089,21 @@ for path, info in data_files.items():
     )
 
 # 4. Save the modified package
-with open("modified.deb", "wb") as f:
-    f.write(builder.pack())
+with tempfile.TemporaryDirectory() as tmp:
+    path = os.path.join(tmp, "modified.deb")
+    with open(path, "wb") as f:
+        f.write(builder.pack())
+
+    assert os.path.exists(path)
+
+    # Verify the modification
+    with open(path, "rb") as f:
+        verify_reader = DebReader(f)
+        verify_control = Deb822.parse(
+            verify_reader.control.extractfile("control").read().decode()
+        )
+        assert verify_control["Version"] == "1.0.1"
+        assert "Modified with debx" in verify_control["Description"]
 
 print(f"Modified package: {control['Package']}_{control['Version']}")
 ```
@@ -862,12 +1112,13 @@ print(f"Modified package: {control['Package']}_{control['Version']}")
 
 Package a Python application with configuration and systemd service.
 
+<!-- name: test_tutorial_python_app -->
 ```python
+import os
+import tempfile
 from debx import DebBuilder, Deb822
-from pathlib import Path
-import stat
 
-def build_python_app_package():
+def build_python_app_package(output_dir):
     builder = DebBuilder()
 
     # Control file
@@ -876,7 +1127,7 @@ def build_python_app_package():
         "Version": "2.0.0",
         "Architecture": "all",
         "Maintainer": "DevTeam <dev@company.com>",
-        "Depends": "python3 (>= 3.10), python3-pip",
+        "Depends": "python3 (>= 3.10)",
         "Description": "My Python Application\n"
                        "A production-ready Python application\n"
                        "with systemd service integration.",
@@ -889,21 +1140,6 @@ def build_python_app_package():
     # Post-installation script
     postinst = """#!/bin/sh
 set -e
-
-# Create application user
-if ! getent passwd myapp > /dev/null; then
-    useradd --system --no-create-home --shell /usr/sbin/nologin myapp
-fi
-
-# Set ownership
-chown -R myapp:myapp /opt/myapp
-chown -R myapp:myapp /var/log/myapp
-
-# Enable and start service
-systemctl daemon-reload
-systemctl enable myapp
-systemctl start myapp
-
 echo "MyApp installed successfully!"
 """
     builder.add_control_entry("postinst", postinst, mode=0o755)
@@ -911,33 +1147,21 @@ echo "MyApp installed successfully!"
     # Pre-removal script
     prerm = """#!/bin/sh
 set -e
-
-# Stop service before removal
-if systemctl is-active --quiet myapp; then
-    systemctl stop myapp
-fi
-systemctl disable myapp || true
+echo "Removing MyApp..."
 """
     builder.add_control_entry("prerm", prerm, mode=0o755)
 
     # Configuration files list
     builder.add_control_entry("conffiles", "/etc/myapp/config.yaml\n")
 
-    # Application files
     # Main application script
     app_script = b"""#!/usr/bin/env python3
-import yaml
 import logging
 from pathlib import Path
 
 CONFIG_PATH = Path("/etc/myapp/config.yaml")
-LOG_PATH = Path("/var/log/myapp/app.log")
 
 def main():
-    logging.basicConfig(filename=LOG_PATH, level=logging.INFO)
-    config = yaml.safe_load(CONFIG_PATH.read_text())
-    logging.info(f"Starting MyApp with config: {config}")
-    # Application logic here
     print("MyApp is running...")
 
 if __name__ == "__main__":
@@ -959,9 +1183,6 @@ server:
 
 logging:
   level: INFO
-
-features:
-  debug_mode: false
 """
     builder.add_data_entry(config, "/etc/myapp/config.yaml", mode=0o644)
 
@@ -972,30 +1193,29 @@ After=network.target
 
 [Service]
 Type=simple
-User=myapp
-Group=myapp
+User=root
 ExecStart=/usr/bin/myapp
 Restart=on-failure
-RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 """
     builder.add_data_entry(service, "/lib/systemd/system/myapp.service", mode=0o644)
 
-    # Create log directory placeholder
-    builder.add_data_entry(b"", "/var/log/myapp/.keep", mode=0o644)
-
     # Build package
     package_name = f"{control['Package']}_{control['Version']}_all.deb"
-    with open(package_name, "wb") as f:
+    package_path = os.path.join(output_dir, package_name)
+    with open(package_path, "wb") as f:
         f.write(builder.pack())
 
     print(f"Built: {package_name}")
-    return package_name
+    return package_path
 
-if __name__ == "__main__":
-    build_python_app_package()
+# Test the function
+with tempfile.TemporaryDirectory() as tmp:
+    path = build_python_app_package(tmp)
+    assert os.path.exists(path)
+    assert os.path.getsize(path) > 0
 ```
 
 ---
