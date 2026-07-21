@@ -12,6 +12,7 @@ from .ar import ArFile, pack_ar_archive
 
 log = logging.getLogger(__name__)
 
+DEFAULT_COMPRESSION_LEVEL = 9
 
 class TarInfoContent(NamedTuple):
     tar_info: TarInfo
@@ -19,11 +20,12 @@ class TarInfoContent(NamedTuple):
 
 
 class DebBuilder:
-    def __init__(self):
+    def __init__(self, compression_level: int = DEFAULT_COMPRESSION_LEVEL) -> None:
+        self.compression_level = compression_level
         self.md5sums: dict[PurePosixPath, str] = {}
         self.data_files: dict[str, TarInfoContent] = dict()
         self.control_files: dict[str, TarInfoContent] = dict()
-        self.directories = set()
+        self.directories: set = set()
 
     def add_control_entry(
         self,
@@ -106,7 +108,12 @@ class DebBuilder:
         md5sums.seek(0)
 
         with io.BytesIO() as tarfp:
-            with tarfile.open(fileobj=tarfp, mode="w:gz", format=tarfile.GNU_FORMAT, compresslevel=9) as tar:
+            with tarfile.open(
+                fileobj=tarfp,
+                mode="w:gz",
+                format=tarfile.GNU_FORMAT,
+                compresslevel=self.compression_level,
+            ) as tar:
                 tar.addfile(md5sums_info, md5sums)
                 for tarinfo, content in self.control_files.values():
                     log.debug("Adding control entry: %s", tarinfo.name)
@@ -115,7 +122,12 @@ class DebBuilder:
 
     def create_data_tar(self) -> bytes:
         with io.BytesIO() as fp:
-            with tarfile.open(fileobj=fp, mode="w:bz2", format=tarfile.GNU_FORMAT, compresslevel=9) as tar:
+            with tarfile.open(
+                fileobj=fp,
+                mode="w:bz2",
+                format=tarfile.GNU_FORMAT,
+                compresslevel=self.compression_level,
+            ) as tar:
                 for directory_info in self.get_directories():
                     logging.debug("Adding directory to data archive: %s", directory_info.path)
                     tar.addfile(directory_info)
