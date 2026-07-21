@@ -4,9 +4,9 @@ from pathlib import Path
 
 from .cli.inspect import cli_inspect
 from .cli.pack import cli_pack, parse_file
+from .cli.sign import cli_sign
 from .cli.types import Formatter
 from .cli.unpack import cli_unpack
-from .cli.sign import cli_sign
 
 
 PARSER = ArgumentParser(formatter_class=Formatter)
@@ -29,7 +29,7 @@ Modifiers examples:
  * uid=1000 - set file owner to 1000
  * gid=1000 - set file group to 1000
  * mtime=1234567890 - set file modification time to 1234567890
- 
+
 For example:
 
 debx pack \\

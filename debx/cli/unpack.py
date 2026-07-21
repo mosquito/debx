@@ -4,7 +4,8 @@ import tarfile
 from argparse import Namespace
 from pathlib import Path
 
-from ..ar import unpack_ar_archive
+from debx.ar import unpack_ar_archive
+
 from .types import TAR_EXTENSIONS
 
 
@@ -38,7 +39,9 @@ def cli_unpack(args: Namespace) -> int:
         target_dir.mkdir(parents=True, exist_ok=True)
 
         with tarfile.open(file, "r:*") as tar:
-            def extract_filter(tarinfo: tarfile.TarInfo, _: str) -> tarfile.TarInfo:
+            def extract_filter(
+                tarinfo: tarfile.TarInfo, _: str, target_dir: Path = target_dir,
+            ) -> tarfile.TarInfo:
                 log.info("Extracting %s/%s", target_dir, tarinfo.name)
                 return tarinfo
 

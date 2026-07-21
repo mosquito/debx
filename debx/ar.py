@@ -1,8 +1,9 @@
 import io
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import IO, Iterator, Union
+from typing import IO
 
 
 class ARFileError(Exception):
@@ -33,7 +34,7 @@ class ArFile:
     mtime: int = field(default_factory=lambda: int(time.time()))
 
     @classmethod
-    def from_file(cls, path: Union[str, Path], arcname: str = "") -> "ArFile":
+    def from_file(cls, path: str | Path, arcname: str = "") -> "ArFile":
         path = Path(path)
         name = str(arcname) if arcname else str(path.name)
         stat = path.stat()
@@ -42,13 +43,12 @@ class ArFile:
         return cls(name=name, size=size, mtime=mtime, content=path.open("rb").read())
 
     @classmethod
-    def from_bytes(cls, data: bytes, name: str, **kwargs) -> "ArFile":
-        name = str(name)
+    def from_bytes(cls, data: bytes, name: str | Path, **kwargs: int) -> "ArFile":
         size = len(data)
-        return cls(name=name, size=size, content=data, **kwargs)
+        return cls(name=str(name), size=size, content=data, **kwargs)
 
     @classmethod
-    def from_fp(cls, fp: IO[bytes], name: Union[str, Path], **kwargs) -> "ArFile":
+    def from_fp(cls, fp: IO[bytes], name: str | Path, **kwargs: int) -> "ArFile":
         return cls.from_bytes(fp.read(), name, **kwargs)
 
     @classmethod

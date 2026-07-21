@@ -3,12 +3,12 @@ Tests for CLI sign command.
 """
 import io
 from argparse import Namespace
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from debx import ArFile, pack_ar_archive, unpack_ar_archive, DebBuilder, Deb822
-from debx.cli.sign import cli_sign_extract_payload, cli_sign_write_signature, cli_sign
+from debx import ArFile, Deb822, DebBuilder, pack_ar_archive, unpack_ar_archive
+from debx.cli.sign import cli_sign, cli_sign_extract_payload, cli_sign_write_signature
 
 
 @pytest.fixture

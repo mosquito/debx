@@ -7,6 +7,23 @@ on:
     branches: [ master ]
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: ruff
+        run: uv run ruff check .
+
+      - name: ty
+        run: uv run ty check
+
   tests:
     runs-on: "${{ matrix.os }}"
 

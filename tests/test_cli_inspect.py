@@ -11,8 +11,8 @@ from unittest.mock import patch
 
 import pytest
 
-from debx import ArFile, pack_ar_archive, DebBuilder, Deb822
-from debx.cli.inspect import cli_inspect, format_ls, format_csv, format_json
+from debx import ArFile, Deb822, DebBuilder, pack_ar_archive
+from debx.cli.inspect import cli_inspect, format_csv, format_json, format_ls
 from debx.cli.types import InspectItem, TarInfoType
 
 
@@ -147,8 +147,8 @@ class TestFormatTimeLocale:
 
     def test_format_time_with_valid_locale(self):
         """Test _format_time with a valid locale."""
+
         from debx.cli.inspect import _format_time
-        import locale
 
         current_time = int(time.time())
 
@@ -158,8 +158,9 @@ class TestFormatTimeLocale:
 
     def test_format_time_with_invalid_locale_on_set(self):
         """Test _format_time when setting locale fails."""
-        from debx.cli.inspect import _format_time
         import locale
+
+        from debx.cli.inspect import _format_time
 
         current_time = int(time.time())
         original_setlocale = locale.setlocale
@@ -176,8 +177,9 @@ class TestFormatTimeLocale:
 
     def test_format_time_with_locale_restore_error(self):
         """Test _format_time when restoring locale fails and falls back to 'C'."""
-        from debx.cli.inspect import _format_time
         import locale
+
+        from debx.cli.inspect import _format_time
 
         current_time = int(time.time())
         original_setlocale = locale.setlocale
@@ -197,11 +199,13 @@ class TestFormatTimeLocale:
             # Allow setting user_locale
             return original_setlocale(category, 'C')
 
-        with patch.object(locale, 'setlocale', side_effect=mock_setlocale):
-            with patch.object(locale, 'getlocale', return_value=('invalid', 'locale')):
-                # This should not raise, should fallback to 'C'
-                result = _format_time(current_time, user_locale='C')
-                assert len(result) > 0
+        with (
+            patch.object(locale, 'setlocale', side_effect=mock_setlocale),
+            patch.object(locale, 'getlocale', return_value=('invalid', 'locale')),
+        ):
+            # This should not raise, should fallback to 'C'
+            result = _format_time(current_time, user_locale='C')
+            assert len(result) > 0
 
 
 class TestFormatSizeDecimal:
@@ -655,11 +659,10 @@ class TestFormatLsIntegration:
                 path=None,
             )
         ]
-        with patch("sys.stdout.isatty", return_value=False):
-            with patch("sys.stderr.write") as mock_stderr:
-                format_ls(items)
-                # Should write hint to stderr
-                mock_stderr.assert_called()
+        with patch("sys.stdout.isatty", return_value=False), patch("sys.stderr.write") as mock_stderr:
+            format_ls(items)
+            # Should write hint to stderr
+            mock_stderr.assert_called()
 
 
 class TestInspectXzFormat:
@@ -697,9 +700,11 @@ class TestInspectXzFormat:
         pkg_path.write_bytes(ar_content)
 
         args = Namespace(package=str(pkg_path), format="ls")
-        with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
-            with patch("sys.stdout.isatty", return_value=True):
-                result = cli_inspect(args)
+        with (
+            patch("sys.stdout", new_callable=io.StringIO) as mock_stdout,
+            patch("sys.stdout.isatty", return_value=True),
+        ):
+            result = cli_inspect(args)
 
         assert result == 0
         output = mock_stdout.getvalue()
@@ -740,9 +745,8 @@ class TestInspectNoMd5sums:
         pkg_path.write_bytes(ar_content)
 
         args = Namespace(package=str(pkg_path), format="ls")
-        with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
-            with patch("sys.stdout.isatty", return_value=True):
-                result = cli_inspect(args)
+        with patch("sys.stdout", new_callable=io.StringIO), patch("sys.stdout.isatty", return_value=True):
+            result = cli_inspect(args)
 
         assert result == 0
 
@@ -772,9 +776,11 @@ class TestInspectNoControlTar:
         pkg_path.write_bytes(ar_content)
 
         args = Namespace(package=str(pkg_path), format="ls")
-        with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
-            with patch("sys.stdout.isatty", return_value=True):
-                result = cli_inspect(args)
+        with (
+            patch("sys.stdout", new_callable=io.StringIO) as mock_stdout,
+            patch("sys.stdout.isatty", return_value=True),
+        ):
+            result = cli_inspect(args)
 
         assert result == 0
         output = mock_stdout.getvalue()
@@ -815,9 +821,11 @@ class TestInspectPlainTar:
         pkg_path.write_bytes(ar_content)
 
         args = Namespace(package=str(pkg_path), format="ls")
-        with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
-            with patch("sys.stdout.isatty", return_value=True):
-                result = cli_inspect(args)
+        with (
+            patch("sys.stdout", new_callable=io.StringIO) as mock_stdout,
+            patch("sys.stdout.isatty", return_value=True),
+        ):
+            result = cli_inspect(args)
 
         assert result == 0
         output = mock_stdout.getvalue()
@@ -947,9 +955,11 @@ class TestInspectIntegration:
         """Test inspect with ls-style output format."""
         args = Namespace(package=str(test_package), format="ls")
 
-        with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
-            with patch("sys.stdout.isatty", return_value=True):
-                result = cli_inspect(args)
+        with (
+            patch("sys.stdout", new_callable=io.StringIO) as mock_stdout,
+            patch("sys.stdout.isatty", return_value=True),
+        ):
+            result = cli_inspect(args)
 
         assert result == 0
         output = mock_stdout.getvalue()
@@ -975,10 +985,12 @@ class TestInspectIntegration:
         """Test inspect with ls format when stdout is not a tty (shows hint)."""
         args = Namespace(package=str(test_package), format="ls")
 
-        with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
-            with patch("sys.stdout.isatty", return_value=False):
-                with patch("sys.stderr", new_callable=io.StringIO) as mock_stderr:
-                    result = cli_inspect(args)
+        with (
+            patch("sys.stdout", new_callable=io.StringIO) as mock_stdout,
+            patch("sys.stdout.isatty", return_value=False),
+            patch("sys.stderr", new_callable=io.StringIO) as mock_stderr,
+        ):
+            result = cli_inspect(args)
 
         assert result == 0
         # Should show hint about using other formats
@@ -994,9 +1006,11 @@ class TestInspectIntegration:
         for fmt in formats:
             args = Namespace(package=str(test_package), format=fmt)
 
-            with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
-                with patch("sys.stdout.isatty", return_value=True):
-                    result = cli_inspect(args)
+            with (
+                patch("sys.stdout", new_callable=io.StringIO) as mock_stdout,
+                patch("sys.stdout.isatty", return_value=True),
+            ):
+                result = cli_inspect(args)
 
             assert result == 0, f"Format {fmt} failed"
 

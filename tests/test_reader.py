@@ -1,7 +1,8 @@
 import io
 
 import pytest
-from debx import DebBuilder, Deb822, DebReader
+
+from debx import Deb822, DebBuilder, DebReader
 
 
 @pytest.fixture

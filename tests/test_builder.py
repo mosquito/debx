@@ -1,11 +1,11 @@
 import hashlib
 import io
 import tarfile
+from pathlib import Path, PurePosixPath
 
 import pytest
-from pathlib import PurePosixPath, Path
 
-from debx import unpack_ar_archive, DebBuilder, Deb822, DebReader
+from debx import Deb822, DebBuilder, DebReader, unpack_ar_archive
 
 
 @pytest.fixture

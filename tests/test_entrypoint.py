@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from debx import DebBuilder, Deb822
+from debx import Deb822, DebBuilder
 
 
 class TestEntryPoint:
@@ -15,14 +15,13 @@ class TestEntryPoint:
 
     def test_main_no_args(self):
         """Test main with no arguments shows help."""
-        from debx.__main__ import main, PARSER
+        from debx.__main__ import PARSER, main
 
-        with patch.object(sys, 'argv', ['debx']):
-            with patch.object(PARSER, 'print_help') as mock_help:
-                with pytest.raises(SystemExit) as exc_info:
-                    main()
-                assert exc_info.value.code == 1
-                mock_help.assert_called_once()
+        with patch.object(sys, 'argv', ['debx']), patch.object(PARSER, 'print_help') as mock_help:
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 1
+            mock_help.assert_called_once()
 
     def test_main_inspect_command(self, tmp_path):
         """Test main with inspect command."""
@@ -43,12 +42,14 @@ class TestEntryPoint:
         pkg_path = tmp_path / "test.deb"
         pkg_path.write_bytes(builder.pack())
 
-        with patch.object(sys, 'argv', ['debx', 'inspect', str(pkg_path)]):
-            with patch("sys.stdout", new_callable=io.StringIO):
-                with patch("sys.stdout.isatty", return_value=True):
-                    with pytest.raises(SystemExit) as exc_info:
-                        main()
-                    assert exc_info.value.code == 0
+        with (
+            patch.object(sys, 'argv', ['debx', 'inspect', str(pkg_path)]),
+            patch("sys.stdout", new_callable=io.StringIO),
+            patch("sys.stdout.isatty", return_value=True),
+        ):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 0
 
     def test_main_pack_command(self, tmp_path):
         """Test main with pack command."""

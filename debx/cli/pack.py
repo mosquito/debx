@@ -3,10 +3,12 @@ import os
 import re
 import sys
 from argparse import ArgumentTypeError, Namespace
+from collections.abc import Iterable
 from pathlib import Path, PurePosixPath
-from typing import Iterable
+from typing import Any
 
-from ..builder import DebBuilder
+from debx.builder import DebBuilder
+
 from .types import CLIFile
 
 
@@ -40,7 +42,7 @@ def make_file(path: Path, dest: str, **kwargs) -> CLIFile:
 FILE_REGEXP = re.compile(r"^(?P<src>(?:[A-Za-z]:)?[^:]+):(?P<dest>(?:[A-Za-z]:)?[^:]+)(?::(?P<mods>.*))?$")
 
 def parse_file(file: str) -> Iterable[CLIFile]:
-    result = {}
+    result: dict[str, Any] = {}
     if ":" not in file:
         raise ArgumentTypeError(f"Invalid file format: {file!r} (should be src:dest[:modifiers])")
 
@@ -79,10 +81,10 @@ def parse_file(file: str) -> Iterable[CLIFile]:
         dest_path = PurePosixPath(dest)
         files = []
 
-        for subdir, dirs, subfiles in os.walk(path):
+        for subdir, _dirs, subfiles in os.walk(path):
             subdir = Path(subdir)
             for fname in subfiles:
-                subpath = Path(subdir) / fname
+                subpath = subdir / fname
 
                 stat = subpath.stat()
                 files.append(

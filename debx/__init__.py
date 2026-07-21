@@ -1,6 +1,11 @@
 from .ar import (
-    ArFile, ARFileError, EmptyHeaderError, TruncatedDataError,
-    TruncatedHeaderError, pack_ar_archive, unpack_ar_archive,
+    ArFile,
+    ARFileError,
+    EmptyHeaderError,
+    TruncatedDataError,
+    TruncatedHeaderError,
+    pack_ar_archive,
+    unpack_ar_archive,
 )
 from .builder import DebBuilder
 from .deb822 import Deb822

@@ -1,3 +1,4 @@
+import contextlib
 import csv
 import datetime
 import hashlib
@@ -10,9 +11,10 @@ import stat
 import sys
 import tarfile
 from argparse import Namespace
-from typing import Optional
+from typing import Literal
 
-from ..ar import unpack_ar_archive
+from debx.ar import ArFile, unpack_ar_archive
+
 from .types import TAR_EXTENSIONS, InspectItem, TarInfoType
 
 
@@ -24,15 +26,15 @@ def _format_size(size: int) -> str:
     if size == 0:
         return "0B"
     size_names = ("B", "K", "M", "G", "T", "P", "E", "Z", "Y")
-    i = int(math.floor(math.log(size, 1024)))
+    i = math.floor(math.log(size, 1024))
     p = math.pow(1024, i)
-    s = round(size / p, 1)
-    if s.is_integer():
-        s = int(s)
-    return f"{s}{size_names[i]}"
+    value = round(size / p, 1)
+    if value == int(value):
+        return f"{int(value)}{size_names[i]}"
+    return f"{value}{size_names[i]}"
 
 
-def _format_mode(mode: Optional[int], item_type: Optional[str] = None) -> str:
+def _format_mode(mode: int | None, item_type: str | None = None) -> str:
     """Format file mode as ls-style permission string."""
     if mode is None:
         return "----------"
@@ -76,25 +78,20 @@ def _format_mode(mode: Optional[int], item_type: Optional[str] = None) -> str:
     return result
 
 
-def _format_time(mtime: Optional[int], user_locale: Optional[str] = None) -> str:
+def _format_time(mtime: int | None, user_locale: str | None = None) -> str:
     """Format modification time in ls-style format."""
     if mtime is None:
         return "         "
 
     old_locale = locale.getlocale(locale.LC_TIME)
     if user_locale:
-        try:
+        with contextlib.suppress(locale.Error):
             locale.setlocale(locale.LC_TIME, user_locale)
-        except locale.Error:
-            pass
 
     dt = datetime.datetime.fromtimestamp(mtime)
     now = datetime.datetime.now()
 
-    if dt.year == now.year:
-        result = dt.strftime("%d %b %H:%M")
-    else:
-        result = dt.strftime("%d %b  %Y")
+    result = dt.strftime("%d %b %H:%M") if dt.year == now.year else dt.strftime("%d %b  %Y")
 
     if user_locale:
         try:
@@ -123,10 +120,7 @@ def format_ls(items: list[InspectItem]) -> str:
     max_gid_len = max(len(str(item.get("gid", 0))) for item in items)
 
     for item in sorted(items, key=lambda x: x["file"]):
-        if item.get("path"):
-            file_name = item["file"] + "/" + item.get("path", "")
-        else:
-            file_name = item["file"]
+        file_name = f"{item['file']}/{item.get('path', '')}" if item.get("path") else item["file"]
         file_size = _format_size(item.get("size", 0))
         file_mode = _format_mode(item.get("mode", None), item.get("type", None))
         file_uid = str(item.get("uid", 0)).rjust(max_uid_len)
@@ -169,11 +163,20 @@ def format_json(items: list[InspectItem]) -> str:
         return f.getvalue()
 
 
+def _tar_read_mode(name: str) -> Literal["r", "r:xz", "r:gz", "r:bz2"]:
+    if name.endswith(".tar.xz"):
+        return "r:xz"
+    if name.endswith(".tar.gz"):
+        return "r:gz"
+    if name.endswith(".tar.bz2"):
+        return "r:bz2"
+    return "r"
+
+
 def cli_inspect(args: Namespace) -> int:
-    data = []
-    md5sums = {}
-    control_tar = None
-    control_tar_mode = None
+    data: list[InspectItem] = []
+    md5sums: dict[str, str] = {}
+    control_tar: ArFile | None = None
 
     with open(args.package, "rb") as package_fp:
         for entry in unpack_ar_archive(package_fp):
@@ -195,19 +198,10 @@ def cli_inspect(args: Namespace) -> int:
                 )
                 continue
 
-            mode = "r"
-            if entry.name.endswith(".tar.xz"):
-                mode = "r:xz"
-            elif entry.name.endswith(".tar.gz"):
-                mode = "r:gz"
-            elif entry.name.endswith(".tar.bz2"):
-                mode = "r:bz2"
-
             if entry.name.startswith("control.tar"):
                 control_tar = entry
-                control_tar_mode = mode
 
-            with tarfile.open(fileobj=entry.fp, mode=mode) as tar:
+            with tarfile.open(fileobj=entry.fp, mode=_tar_read_mode(entry.name)) as tar:
                 data.append(
                     InspectItem(
                         file=entry.name,
@@ -224,27 +218,31 @@ def cli_inspect(args: Namespace) -> int:
                 for tarinfo in tar:
                     log.debug("Tar entry: %s", tarinfo.name)
                     data.append(
-                        dict(
+                        InspectItem(
                             file=entry.name,
                             size=tarinfo.size,
                             type=TarInfoType(tarinfo.type).name,
                             mode=tarinfo.mode,
                             uid=tarinfo.uid,
                             gid=tarinfo.gid,
-                            mtime=tarinfo.mtime,
+                            mtime=int(tarinfo.mtime),
                             path=tarinfo.name,
                             md5=None,
                         ),
                     )
 
     if control_tar:
-        with tarfile.open(fileobj=control_tar.fp, mode=control_tar_mode) as tar:
+        with tarfile.open(fileobj=control_tar.fp, mode=_tar_read_mode(control_tar.name)) as tar:
             for tarinfo in tar:
                 log.debug("Control entry: %s", tarinfo.name)
                 if tarinfo.name != "md5sums":
                     continue
 
-                for md5line in tar.extractfile(tarinfo).read().decode().splitlines():
+                md5_fp = tar.extractfile(tarinfo)
+                if md5_fp is None:
+                    break
+
+                for md5line in md5_fp.read().decode().splitlines():
                     md5sum, path = md5line.split(maxsplit=1)
                     md5sums[path.strip()] = md5sum.strip()
                 break

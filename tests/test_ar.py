@@ -1,9 +1,18 @@
 import io
+from io import BytesIO
 
 import pytest
-from io import BytesIO
-from debx import ArFile, pack_ar_archive, unpack_ar_archive, EmptyHeaderError, TruncatedHeaderError, DebReader, \
-    TruncatedDataError
+
+from debx import (
+    ArFile,
+    DebReader,
+    EmptyHeaderError,
+    TruncatedDataError,
+    TruncatedHeaderError,
+    pack_ar_archive,
+    unpack_ar_archive,
+)
+
 
 TEST_CONTENT = b"test file content"
 TEST_NAME = "testfile.txt"
@@ -80,7 +89,7 @@ class TestReaderErrors:
             ArFile.from_bytes(b"2.0\n", "debian-binary"),
             ArFile.from_bytes(b"content", "control.tar.gz"),
         )
-        with pytest.raises(KeyError, match="Missing 'data.tar'"):
+        with pytest.raises(KeyError, match=r"Missing 'data.tar'"):
             DebReader(io.BytesIO(ar_content))
 
     def test_multiple_data_tar_files(self):
@@ -91,7 +100,7 @@ class TestReaderErrors:
             ArFile.from_bytes(b"content", "data.tar.gz"),
             ArFile.from_bytes(b"content", "data.tar.bz2"),
         )
-        with pytest.raises(ValueError, match="Multiple data.tar files"):
+        with pytest.raises(ValueError, match=r"Multiple data.tar files"):
             DebReader(io.BytesIO(ar_content))
 
     def test_unsupported_compression(self):

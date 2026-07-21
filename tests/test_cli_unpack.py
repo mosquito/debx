@@ -4,7 +4,7 @@ Tests for CLI unpack command.
 import os
 from argparse import Namespace
 
-from debx import DebBuilder, Deb822
+from debx import Deb822, DebBuilder
 from debx.cli.unpack import cli_unpack
 
 

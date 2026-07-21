@@ -3,9 +3,10 @@ import io
 import logging
 import tarfile
 import time
+from collections.abc import Iterable
 from pathlib import Path, PurePosixPath
 from tarfile import TarInfo
-from typing import Iterable, NamedTuple, Optional, Union
+from typing import NamedTuple
 
 from .ar import ArFile, pack_ar_archive
 
@@ -23,14 +24,14 @@ class DebBuilder:
     def __init__(self, compression_level: int = DEFAULT_COMPRESSION_LEVEL) -> None:
         self.compression_level = compression_level
         self.md5sums: dict[PurePosixPath, str] = {}
-        self.data_files: dict[str, TarInfoContent] = dict()
-        self.control_files: dict[str, TarInfoContent] = dict()
-        self.directories: set = set()
+        self.data_files: dict[str, TarInfoContent] = {}
+        self.control_files: dict[str, TarInfoContent] = {}
+        self.directories: set[Path] = set()
 
     def add_control_entry(
         self,
         name: str,
-        content: Union[str, bytes],
+        content: str | bytes,
         mode: int = 0o644,
         mtime: int = -1,
     ) -> None:
@@ -51,12 +52,12 @@ class DebBuilder:
     def add_data_entry(
         self,
         content: bytes,
-        name: Union[PurePosixPath, str],
+        name: PurePosixPath | str,
         uid: int = 0,
         gid: int = 0,
         mode: int = 0o644,
         mtime: int = -1,
-        symlink_to: Optional[Union[PurePosixPath, str]] = None,
+        symlink_to: PurePosixPath | str | None = None,
     ) -> None:
         name = PurePosixPath(name)
         tar_info_path = name.relative_to("/")
@@ -100,7 +101,7 @@ class DebBuilder:
         md5sums = io.BytesIO()
         for path, md5sum in sorted(self.md5sums.items(), key=lambda x: x[0]):
             rel_path = path.relative_to("/") if path.is_absolute() else path
-            md5sums.write(f"{md5sum}  {rel_path}\n".encode("utf-8"))
+            md5sums.write(f"{md5sum}  {rel_path}\n".encode())
 
         md5sums_info = TarInfo("md5sums")
         md5sums_info.size = md5sums.tell()
@@ -143,7 +144,7 @@ class DebBuilder:
 
     def pack(self) -> bytes:
         return pack_ar_archive(
-            ArFile.from_bytes("2.0\n".encode("utf-8"), "debian-binary"),
+            ArFile.from_bytes(b"2.0\n", "debian-binary"),
             ArFile.from_bytes(self.create_control_tar(), "control.tar.gz"),
             ArFile.from_bytes(self.create_data_tar(), "data.tar.bz2"),
         )

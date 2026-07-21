@@ -2,7 +2,7 @@ import tarfile
 from argparse import ArgumentDefaultsHelpFormatter, RawTextHelpFormatter
 from enum import Enum
 from pathlib import PurePosixPath
-from typing import Optional, TypedDict
+from typing import TypedDict
 
 
 class Formatter(RawTextHelpFormatter, ArgumentDefaultsHelpFormatter):
@@ -32,13 +32,13 @@ class TarInfoType(bytes, Enum):
 class InspectItem(TypedDict):
     file: str
     size: int
-    type: Optional[str]
-    mode: Optional[int]
-    uid: Optional[int]
-    gid: Optional[int]
-    mtime: Optional[int]
-    md5: Optional[str]
-    path: Optional[str]
+    type: str | None
+    mode: int | None
+    uid: int | None
+    gid: int | None
+    mtime: int | None
+    md5: str | None
+    path: str | None
 
 
 TAR_EXTENSIONS = (".tar.xz", ".tar.gz", ".tar.bz2", ".tar")

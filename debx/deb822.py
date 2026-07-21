@@ -1,7 +1,8 @@
 from collections import OrderedDict
+from collections.abc import Iterator, Mapping, MutableMapping
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Dict, Mapping, MutableMapping, Union
+from typing import Any
 
 
 class Deb822(MutableMapping[str, Any]):
@@ -29,7 +30,7 @@ class Deb822(MutableMapping[str, Any]):
         return inst
 
     @classmethod
-    def from_file(cls, path: Union[str, Path]) -> "Deb822":
+    def from_file(cls, path: str | Path) -> "Deb822":
         path = Path(path)
         return cls.parse(path.read_text())
 
@@ -45,20 +46,20 @@ class Deb822(MutableMapping[str, Any]):
                 lines.append(f"{key}: {val}")
         return "\n".join(lines) + "\n"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return dict(self.fields)
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: str, value: Any) -> None:
         self.fields[key] = value
 
-    def __delitem__(self, key):
+    def __delitem__(self, key: str) -> None:
         del self.fields[key]
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str) -> Any:
         return self.fields[key]
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.fields)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[str]:
         return iter(self.fields)

@@ -64,7 +64,7 @@ def test_comments_ignored():
 
     deb = Deb822.parse(content)
     assert "Package" in deb
-    assert "#" not in deb.keys()
+    assert "#" not in deb
 
 
 def test_mapping_getitem(sample_deb822):

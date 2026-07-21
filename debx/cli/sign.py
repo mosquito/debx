@@ -2,7 +2,7 @@ import logging
 import sys
 from argparse import Namespace
 
-from debx.ar import unpack_ar_archive, pack_ar_archive, ArFile
+from debx.ar import ArFile, pack_ar_archive, unpack_ar_archive
 
 
 log = logging.getLogger(__name__)
