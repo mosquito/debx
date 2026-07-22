@@ -75,6 +75,7 @@ class TestPackUnpackIntegration:
               "name": "/etc/test-package/config", "mode": 0o644}]
         ]
         pack_args.deb = str(output_deb)
+        pack_args.compression_level = 9
 
         # Run pack command
         cli_pack(pack_args)
@@ -117,6 +118,7 @@ class TestPackInspectIntegration:
               "name": "/etc/test-package/config", "mode": 0o644}]
         ]
         pack_args.deb = str(output_deb)
+        pack_args.compression_level = 9
 
         # Run pack command
         cli_pack(pack_args)
@@ -149,6 +151,7 @@ class TestPackInspectIntegration:
               "name": "/etc/test-package/config", "mode": 0o644}]
         ]
         pack_args.deb = str(output_deb)
+        pack_args.compression_level = 9
 
         # Run pack command
         cli_pack(pack_args)
@@ -182,6 +185,7 @@ class TestPackInspectIntegration:
               "name": "/etc/test-package/config", "mode": 0o644}]
         ]
         pack_args.deb = str(output_deb)
+        pack_args.compression_level = 9
 
         # Run pack command
         cli_pack(pack_args)

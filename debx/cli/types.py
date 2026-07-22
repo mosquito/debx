@@ -1,7 +1,6 @@
 import tarfile
 from argparse import ArgumentDefaultsHelpFormatter, RawTextHelpFormatter
 from enum import Enum
-from pathlib import PurePosixPath
 from typing import TypedDict
 
 
@@ -10,12 +9,13 @@ class Formatter(RawTextHelpFormatter, ArgumentDefaultsHelpFormatter):
 
 
 class CLIFile(TypedDict, total=False):
-    src: bytes
-    dest: PurePosixPath
+    content: bytes
+    name: str
     mode: int
     uid: int
     gid: int
     mtime: int
+    symlink_to: str
 
 
 class TarInfoType(bytes, Enum):

@@ -15,6 +15,7 @@ log = logging.getLogger(__name__)
 
 DEFAULT_COMPRESSION_LEVEL = 9
 
+
 class TarInfoContent(NamedTuple):
     tar_info: TarInfo
     content: bytes

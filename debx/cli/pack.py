@@ -35,7 +35,7 @@ def make_file(path: Path, dest: str, **kwargs) -> CLIFile:
     if "mode" not in kwargs:
         kwargs["mode"] = stat.st_mode & 0o777
     if path.is_symlink():
-        kwargs["symlink_to"] = path.is_symlink()
+        kwargs["symlink_to"] = str(path.readlink())
 
     return CLIFile(**kwargs)
 
@@ -105,7 +105,7 @@ def parse_file(file: str) -> Iterable[CLIFile]:
 
 
 def cli_pack(args: Namespace) -> int:
-    builder = DebBuilder()
+    builder = DebBuilder(compression_level=args.compression_level)
 
     for files in args.control:
         for file in files:
@@ -113,7 +113,6 @@ def cli_pack(args: Namespace) -> int:
             log.info("Adding control file: %s", file["name"])
             file.pop("uid", None)
             file.pop("gid", None)
-            file.pop("symlink_to", None)
             builder.add_control_entry(**file)
 
     for files in args.data:

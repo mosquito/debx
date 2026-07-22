@@ -2,6 +2,7 @@ import logging
 from argparse import ArgumentParser
 from pathlib import Path
 
+from .builder import DEFAULT_COMPRESSION_LEVEL
 from .cli.inspect import cli_inspect
 from .cli.pack import cli_pack, parse_file
 from .cli.sign import cli_sign
@@ -46,6 +47,10 @@ PACK_PARSER.add_argument(
 )
 PACK_PARSER.add_argument(
     "-d", "--data", nargs="*", type=parse_file, help="Data files to include in the package", default=(),
+)
+PACK_PARSER.add_argument(
+    "-C", "--compression-level", default=DEFAULT_COMPRESSION_LEVEL, type=int, choices=range(1, 10),
+    metavar="{1-9}", help="Compression level for the control and data archives",
 )
 PACK_PARSER.add_argument("-o", "--deb", help="Output deb file name", default="output.deb")
 PACK_PARSER.set_defaults(func=cli_pack)
