@@ -83,18 +83,21 @@ class ArFile:
     def fp(self) -> IO[bytes]:
         return io.BytesIO(self.content)
 
+    def header(self) -> bytes:
+        name = self.name.encode("utf-8")
+        name = name[:16].ljust(16, b" ")
+
+        mtime = str(self.mtime).encode("utf-8").ljust(12, b" ")
+        uid = b"0".ljust(6, b" ")
+        gid = b"0".ljust(6, b" ")
+        mode = b"100644".ljust(8, b" ")
+        size = str(self.size).encode("utf-8").ljust(10, b" ")
+
+        return name + mtime + uid + gid + mode + size + b"\x60\x0a"
+
     def dump(self) -> bytes:
         with io.BytesIO() as f:
-            name = self.name.encode("utf-8")
-            name = name[:16].ljust(16, b" ")
-
-            mtime = str(self.mtime).encode("utf-8").ljust(12, b" ")
-            uid = b"0".ljust(6, b" ")
-            gid = b"0".ljust(6, b" ")
-            mode = b"100644".ljust(8, b" ")
-            size = str(self.size).encode("utf-8").ljust(10, b" ")
-
-            f.write(name + mtime + uid + gid + mode + size + b"\x60\x0A")
+            f.write(self.header())
             f.write(self.content)
 
             if self.size % 2 != 0:

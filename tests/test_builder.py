@@ -27,13 +27,7 @@ def test_add_control_entry(builder):
 
 def test_add_data_entry(builder):
     test_data = b"test content"
-    builder.add_data_entry(
-        test_data,
-        PurePosixPath("/usr/share/test"),
-        mode=0o755,
-        uid=1000,
-        gid=1000
-    )
+    builder.add_data_entry(test_data, PurePosixPath("/usr/share/test"), mode=0o755, uid=1000, gid=1000)
 
     assert len(builder.data_files) == 1
     assert len(builder.directories) == 2
@@ -45,11 +39,7 @@ def test_add_data_entry(builder):
 
 
 def test_symlink_handling(builder):
-    builder.add_data_entry(
-        b"",
-        PurePosixPath("/usr/bin/link"),
-        symlink_to="/usr/bin/target"
-    )
+    builder.add_data_entry(b"", PurePosixPath("/usr/bin/link"), symlink_to="/usr/bin/target")
 
     tar_info, _ = next(iter(builder.data_files.values()))
     assert tar_info.type == tarfile.SYMTYPE
@@ -57,10 +47,7 @@ def test_symlink_handling(builder):
 
 
 def test_directory_creation(builder):
-    builder.add_data_entry(
-        b"data",
-        PurePosixPath("/var/lib/test/file")
-    )
+    builder.add_data_entry(b"data", PurePosixPath("/var/lib/test/file"))
 
     assert len(builder.directories) == 3
     dirs = sorted(builder.directories)
@@ -90,6 +77,29 @@ def test_md5sum_calculation(builder):
     assert md5 == hashlib.md5(test_data).hexdigest()
 
 
+def test_write_with_path_content(tmp_path):
+    content = b"x" * (3 * 1024 * 1024 + 1)
+    source = tmp_path / "big.bin"
+    source.write_bytes(content)
+
+    builder = DebBuilder()
+    builder.add_control_entry("control", "Package: test\nVersion: 1.0")
+    builder.add_data_entry(source, "/opt/test/big.bin")
+    assert builder.md5sums[PurePosixPath("/opt/test/big.bin")] == hashlib.md5(content).hexdigest()
+
+    deb_path = tmp_path / "test.deb"
+    with deb_path.open("wb") as f:
+        builder.write(f)
+
+    with deb_path.open("rb") as f:
+        reader = DebReader(f)
+    assert reader.data.extractfile("opt/test/big.bin").read() == content
+
+    ar_names = [f.name for f in unpack_ar_archive(io.BytesIO(deb_path.read_bytes()))]
+    assert ar_names == ["debian-binary", "control.tar.gz", "data.tar.bz2"]
+    assert len(builder.pack()) == deb_path.stat().st_size
+
+
 class TestBuilderEdgeCases:
     """Tests for DebBuilder edge cases."""
 
@@ -106,13 +116,15 @@ class TestBuilderEdgeCases:
         builder.add_data_entry(b"content", "/usr/bin/target", mode=0o755)
         builder.add_data_entry(b"", "/usr/bin/link", symlink_to="/usr/bin/target")
 
-        control = Deb822({
-            "Package": "test",
-            "Version": "1.0",
-            "Architecture": "all",
-            "Maintainer": "Test <test@test.com>",
-            "Description": "Test",
-        })
+        control = Deb822(
+            {
+                "Package": "test",
+                "Version": "1.0",
+                "Architecture": "all",
+                "Maintainer": "Test <test@test.com>",
+                "Description": "Test",
+            }
+        )
         builder.add_control_entry("control", control.dump())
 
         deb_content = builder.pack()

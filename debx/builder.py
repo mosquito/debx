@@ -1,12 +1,14 @@
 import hashlib
 import io
 import logging
+import shutil
 import tarfile
+import tempfile
 import time
 from collections.abc import Iterable
 from pathlib import Path, PurePosixPath
 from tarfile import TarInfo
-from typing import NamedTuple
+from typing import IO, NamedTuple
 
 from .ar import ArFile, pack_ar_archive
 
@@ -21,11 +23,16 @@ class TarInfoContent(NamedTuple):
     content: bytes
 
 
+class DataEntry(NamedTuple):
+    tar_info: TarInfo
+    content: bytes | Path
+
+
 class DebBuilder:
     def __init__(self, compression_level: int = DEFAULT_COMPRESSION_LEVEL) -> None:
         self.compression_level = compression_level
         self.md5sums: dict[PurePosixPath, str] = {}
-        self.data_files: dict[str, TarInfoContent] = {}
+        self.data_files: dict[str, DataEntry] = {}
         self.control_files: dict[str, TarInfoContent] = {}
         self.directories: set[Path] = set()
 
@@ -52,7 +59,7 @@ class DebBuilder:
 
     def add_data_entry(
         self,
-        content: bytes,
+        content: bytes | Path,
         name: PurePosixPath | str,
         uid: int = 0,
         gid: int = 0,
@@ -68,6 +75,14 @@ class DebBuilder:
             tar_info.type = tarfile.SYMTYPE
             tar_info.linkname = str(symlink_to)
             tar_info.size = 0
+        elif isinstance(content, Path):
+            md5 = hashlib.md5()
+            with content.open("rb") as f:
+                while chunk := f.read(1024 * 1024):
+                    md5.update(chunk)
+            self.md5sums[name] = md5.hexdigest()
+            tar_info.type = tarfile.REGTYPE
+            tar_info.size = content.stat().st_size
         else:
             self.md5sums[name] = hashlib.md5(content).hexdigest()
             tar_info = tarfile.TarInfo(str(tar_info_path))
@@ -84,7 +99,7 @@ class DebBuilder:
             current_path = current_path / part
             self.directories.add(current_path)
 
-        self.data_files[tar_info.name] = TarInfoContent(tar_info=tar_info, content=content)
+        self.data_files[tar_info.name] = DataEntry(tar_info=tar_info, content=content)
 
     def get_directories(self) -> Iterable[TarInfo]:
         now = time.time()
@@ -122,10 +137,10 @@ class DebBuilder:
                     tar.addfile(tarinfo, io.BytesIO(content))
             return tarfp.getvalue()
 
-    def create_data_tar(self) -> bytes:
-        with io.BytesIO() as fp:
+    def create_data_tar(self, fp: IO[bytes] | None = None) -> bytes:
+        with io.BytesIO() as buf:
             with tarfile.open(
-                fileobj=fp,
+                fileobj=fp or buf,
                 mode="w:bz2",
                 format=tarfile.GNU_FORMAT,
                 compresslevel=self.compression_level,
@@ -138,10 +153,13 @@ class DebBuilder:
                     logging.debug("Adding data to archive: %s", item.tar_info.name)
                     if item.tar_info.type == tarfile.SYMTYPE:
                         tar.addfile(item.tar_info)
+                    elif isinstance(item.content, Path):
+                        with item.content.open("rb") as f:
+                            tar.addfile(item.tar_info, f)
                     else:
                         tar.addfile(item.tar_info, io.BytesIO(item.content))
 
-            return fp.getvalue()
+            return buf.getvalue()
 
     def pack(self) -> bytes:
         return pack_ar_archive(
@@ -149,3 +167,21 @@ class DebBuilder:
             ArFile.from_bytes(self.create_control_tar(), "control.tar.gz"),
             ArFile.from_bytes(self.create_data_tar(), "data.tar.bz2"),
         )
+
+    def write(self, fp: IO[bytes]) -> None:
+        """Like pack(), but streams into fp: Path entries are never read into memory."""
+        fp.write(
+            pack_ar_archive(
+                ArFile.from_bytes(b"2.0\n", "debian-binary"),
+                ArFile.from_bytes(self.create_control_tar(), "control.tar.gz"),
+            )
+        )
+        with tempfile.TemporaryFile() as data:
+            self.create_data_tar(data)
+            size = data.tell()
+            data.seek(0)
+            # writing header only. Contents will be streamed from the temporary file.
+            fp.write(ArFile(name="data.tar.bz2", size=size, content=b"").header())
+            shutil.copyfileobj(data, fp)
+            if size % 2 != 0:
+                fp.write(b"\n")
